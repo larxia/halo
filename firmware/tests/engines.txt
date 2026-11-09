@@ -1,0 +1,57 @@
+# Each engine on its own, a note or chord held, recorded: tests/analyse.py reads the files.
+master 3000
+wait 600
+tap EDIT
+expect page 1
+wav e1_atmos.wav
+key 7 down
+wait 6000
+key 7 up
+wait 4000
+wavstop
+tap EDIT
+expect page 2
+wav e2_drone.wav
+key 3 down
+wait 200
+key 3 up
+wait 12000
+tap ENV
+wait 6000
+wavstop
+tap EDIT
+expect page 3
+wav e3_shimmer.wav
+key 7 down
+key 11 down
+key 14 down
+wait 7000
+key 7 up
+key 11 up
+key 14 up
+wait 5000
+wavstop
+tap EDIT
+expect page 4
+wav e4_aria.wav
+key 7 down
+key 11 down
+wait 7000
+key 7 up
+key 11 up
+wait 4000
+wavstop
+tap EDIT
+expect page 5
+wav e5_echo.wav
+tapkey 0
+wait 400
+tapkey 4
+wait 400
+tapkey 7
+wait 400
+tapkey 11
+wait 400
+tapkey 14
+wait 4000
+wavstop

@@ -1,0 +1,17 @@
+# HALO's build settings (base/tools/build.py)
+name = "HALO"                  # the build's file names
+id_prefix = "FM-1_74"          # package identity: dev FM-1_7400, releases FM-1_74XXYYZZ
+usb_manufacturer = "HALO"
+usb_product = "HALO FM-1"
+o2 = ["dsp/*.c"]               # the engines, effects and composer at -O2
+words = "words.tsv"
+ble = false
+backup = true                  # sound, song and settings backed up and restored over USB (all or nothing)
+backup_ext = "halo"                    # v0.1: USB and TRS MIDI only (the pool goes to the reverb and the delay)
+tagline = "an ambient workstation for the FM-1"
+repo = ""
+licence = "MPL-2.0"
+credits = "Built on fm1-base (Charles Vestal) and felucca-bsp (Leo Kuroshita, Hügelton Instruments)."
+author = "Xila"
+description = "An ambient workstation: five sound engines (pads, drone, shimmer, choir, bells), a probability step sequencer with a voice-leading chord generator, and INFINITY, a generative mode that composes evolving ambient music in seven moods."
+tags = ["synth", "ambient", "generative", "sequencer"]

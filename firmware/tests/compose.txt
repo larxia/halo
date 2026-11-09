@@ -1,0 +1,53 @@
+# The composer: INFINITY brings in every layer over a few minutes; SEQUENCE plays the chords written in its steps.
+master 3000
+wait 600
+tap PLAY
+wait 150000
+expect playing 1
+expect played0 1
+expect played1 1
+expect played2 1
+expect played4 1
+expect chord_n 4
+tap PLAY
+wait 6000
+expect playing 0
+# SEQUENCE: the mode, a chord on steps 1 and 5 of the pad, played
+tap GLO
+turn ALGO 2
+turn K1 -1
+wait 50
+expect p120 0
+tap SEQ
+expect page 6
+tapkey 1
+expect track 0
+tapkey 0
+tapkey 4
+expect step_on0 1
+expect step_on2 1
+tap PLAY
+wait 8000
+expect playing 1
+expect chord_n 4
+shot seq_playing.png
+tap PLAY
+wait 100
+expect playing 0
+# REC: notes played into the echo's steps, from the cursor (step 3, where the last edit left it)
+tap EDIT
+tap EDIT
+tap EDIT
+tap EDIT
+tap EDIT
+expect page 5
+tap REC
+expect rec 1
+tapkey 0
+tapkey 2
+tap REC
+tap SEQ
+expect track 4
+expect step_on2 1
+expect step_on3 1
+expect step_on4 0

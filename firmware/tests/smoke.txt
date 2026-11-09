@@ -1,0 +1,87 @@
+# HALO smoke test: boot, the pages, a preset, INFINITY plays and stops, the drone holds, a save survives a reboot.
+master 3000
+wait 800
+shot boot.png
+expect page 0
+expect preset 0
+wav infinity_pale_horizon.wav
+tap PLAY
+wait 200
+expect playing 1
+expect chord_n 4
+wait 45000
+shot home_playing.png
+tap GLO
+wait 100
+expect page 7
+shot infinity.png
+wait 30000
+wavstop
+tap PLAY
+wait 200
+expect playing 0
+tap HOME
+turn PRESET 1
+wait 100
+expect preset 1
+tap EDIT
+wait 100
+expect page 1
+shot synth.png
+key 7 down
+wait 300
+expect chord_n 4
+key 7 up
+wait 50
+tap EDIT
+expect page 2
+tap ENV
+wait 50
+expect hold 0
+tap ENV
+expect hold 1
+key 0 down
+wait 100
+key 0 up
+wait 3000
+expect active1 1
+shot drone.png
+tap EDIT
+shot shimmer.png
+tap EDIT
+shot aria.png
+tap EDIT
+shot echo.png
+tap SEQ
+wait 50
+expect page 6
+tapkey 0
+tapkey 4
+wait 50
+expect step_on0 1
+expect step_on2 1
+shot seq.png
+tap FX
+shot fx.png
+tap SEL
+shot presets.png
+turn SELECT 5
+shot settings.png
+tap SAVE
+wait 100
+expect dirty 0
+reboot
+wait 800
+expect preset 1
+expect hold 1
+# backup and restore over USB: a backup, a change, the restore brings the backup back
+backup out:halo_backup.halo
+tap HOME
+turn PRESET 5
+wait 100
+expect preset 6
+tap SAVE
+wait 50
+restore out:halo_backup.halo
+wait 300
+expect preset 1

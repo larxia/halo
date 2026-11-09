@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MPL-2.0
+# HALO's firmware, built from source on GitHub by the shared FM-1 builder (zvenson/fm1-build, a reviewed tag): it
+# installs JieLi's Linux toolchain and the AC79 SDK, runs build.sh, runs the host-simulator tests and attests the
+# packages. A push to main (or a manual run) gives a development build as the run's artifact; a tag vX.Y gives a
+# draft release. Modelled on CTL-1's release workflow (charlesvestal/fm1-ctl).
+#
+# NOT YET RUN: written and checked by eye, never executed. The first run is the first real compile of HALO for the
+# FM-1's CPU; expect to fix what the target compiler and fm1-base's build checks report.
+name: Build HALO firmware
+
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: halo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    uses: zvenson/fm1-build/.github/workflows/build.yml@v1
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      sdk: true
+      tests-block: true
+      build: |
+        set -euo pipefail
+        # the builder checks out without submodules: fm1-base (base/) and its felucca-bsp (base/bsp/)
+        git submodule update --init --recursive
+        # the fonts' OpenType features (base/tools/gen_font.py): Pillow's raqm needs the system's FriBiDi
+        sudo apt-get install -y -qq libfribidi0
+        mkdir -p build/release-assets
+        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          version=${GITHUB_REF_NAME#v}
+          ./build.sh --release "$version"
+          cp "firmware/build/halo-$version.fwsc" build/release-assets/
+        else
+          ./build.sh
+          cp firmware/build/halo.fwsc build/release-assets/
+        fi
+        cp firmware/build/halo.bin build/release-assets/halo-app.bin
+        cp firmware/build/firmware.json build/release-assets/ || true
+      test: |
+        set -euo pipefail
+        sudo apt-get install -y -qq valgrind
+        CPU=1 sh firmware/tests/run_tests.sh
+      packages: build/release-assets/*
