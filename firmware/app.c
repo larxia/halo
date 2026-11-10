@@ -16,7 +16,7 @@
 #include "dsp/halo_dsp.h"
 #include "dsp/halo_comp.h"
 
-#define HALO_VERSION "0.2.0"
+#define HALO_VERSION "0.3.0"
 
 /* ---------------------------------------------------------------- colours --- */
 #define PINK RGB(247, 170, 200)
@@ -57,16 +57,16 @@ static uint8_t dirty;
 static uint8_t test_mode;
 
 /* ------------------------------------------------------------------- pages --- */
-enum { PG_HOME, PG_SYNTH, PG_DRONE, PG_SHIMMER, PG_ARIA, PG_ECHO, PG_SEQ, PG_INFINITY, PG_FX, PG_PRESETS, PG_SETTINGS,
-       NPAGES };
+enum { PG_HOME, PG_SYNTH, PG_DRONE, PG_SHIMMER, PG_ARIA, PG_ECHO, PG_SEQ, PG_INFINITY, PG_CHORDS, PG_FX, PG_PRESETS,
+       PG_SETTINGS, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"HOME", "SYNTH", "DRONE", "SHIMMER", "ARIA", "ECHO", "SEQUENCE",
-                                              "INFINITY", "FX", "PRESETS", "SETTINGS"};
+                                              "INFINITY", "CHORDS", "FX", "PRESETS", "SETTINGS"};
 static const char *const TRACK_NAME[NTRACK] = {"ATMOS", "DRONE", "SHIMMER", "ARIA", "ECHO"};
 static const char *const TRACK_SHORT[NTRACK] = {"PAD", "DRN", "SHM", "ARI", "ECH"};
 
 /* virtual values (not in P[]): the sequencer's step and track, and settings */
 enum { V_NONE = 255, V_STEP_NOTE = 200, V_STEP_ON, V_STEP_PROB, V_STEP_LEN, V_TRK_LEN, V_TRK_DIV, V_TRK_CHAIN, V_TRK_GEN,
-       V_PAT, V_AUTO_ID, V_AUTO_VAL, V_TRACK, SV_LOCK, SV_VEL, SV_QUAL, SV_MIDI, SV_OCT, SV_CLEAR, SV_INIT, V_PRESET, SV_TEST };
+       V_PAT, V_AUTO_ID, V_AUTO_VAL, V_TRACK, SV_LOCK, SV_VEL, SV_QUAL, SV_MIDI, SV_OCT, SV_CLEAR, SV_INIT, V_PRESET, SV_TEST, V_CH_ROOT, V_CH_TYPE, V_CH_BARS, V_CH_COUNT };
 
 #define MAXROWS 7
 typedef struct {
@@ -96,6 +96,8 @@ static const page_rows_t ROWS[NPAGES] = {
     {4, {"MOOD", "BEHAVIOUR", "HARMONY", "RHYTHM"},
      {{G_MOOD, G_KEY, G_SCALE, G_TEMPO}, {G_CPLX, G_DENS, G_EVOL, G_RAND}, {G_MODE, G_CHORD, G_DRIFT, G_SWING},
       {G_PULSE, G_REST, G_BEAT, G_BTONE}}},
+    {2, {"THE SLOT", "PROGRESSION"},
+     {{V_CH_ROOT, V_CH_TYPE, V_CH_BARS, V_CH_COUNT}, {G_PROG, G_DRIFT, G_KEY, G_TEMPO}}},
     {7, {"REVERB", "REVERB", "DELAY", "DELAY", "MODULATION", "MOTION AND HEAT", "TEXTURE"},
      {{R_TYPE, R_SIZE, R_DECAY, R_DAMP}, {R_MOD, R_SHIM, R_LEVEL, R_LOCUT}, {L_TIME, L_FDBK, L_TONE, L_WOW},
       {L_MODE, L_LEVEL, L_TOREV, X_WARBLE}, {C_DEPTH, C_RATE, H_AMT, H_RATE}, {T_DEPTH, T_RATE, X_SAT, X_EXCITE},
@@ -117,7 +119,7 @@ static struct {
     uint8_t cursor, step_page, rec;
     int8_t hold_step;                    /* SEQUENCE: the white key held (-1 none) */
     uint8_t hold_turned, hold_was_on;
-    uint8_t preset_hi;
+    uint8_t preset_hi, slot;           /* slot: the CHORDS page's chord slot */
     uint8_t freeze, freeze_type, freeze_decay;
     uint8_t clear_arm, init_arm;
     uint8_t redraw_head, redraw_main, redraw_cards;
@@ -235,6 +237,10 @@ static const char *vlabel(uint32_t id)
     case SV_INIT: return "INIT SND";
     case V_PRESET: return "PRESET";
     case SV_TEST: return "TEST";
+    case V_CH_ROOT: return "ROOT";
+    case V_CH_TYPE: return "TYPE";
+    case V_CH_BARS: return "BARS";
+    case V_CH_COUNT: return "SLOTS";
     default: return "";
     }
 }
@@ -328,6 +334,18 @@ static void vtext(uint32_t id, char *t)
     case V_PRESET:
         int_text(ui.preset_hi + 1, t);
         break;
+    case V_CH_ROOT:
+        text_cat(t, NOTE_NAME[song.prog[ui.slot].root % 12u]);
+        break;
+    case V_CH_TYPE:
+        text_cat(t, ENUM_TEXT[E_CHORDS][song.prog[ui.slot].type % CH_NOTES]);
+        break;
+    case V_CH_BARS:
+        int_text(song.prog[ui.slot].bars, t);
+        break;
+    case V_CH_COUNT:
+        int_text(song.prog_n, t);
+        break;
     case SV_TEST: {
         static const char *const TN[8] = {"OFF", "TONE", "ATMOS", "DRONE", "SHIMMR", "ARIA", "ECHO", "NO FX"};
         text_cat(t, TN[test_mode % 8u]);
@@ -356,6 +374,16 @@ static float vpos(uint32_t id)
 }
 
 static void song_dirty(void) { dirty = 1; }
+
+/* the CHORDS page: hear the slot's chord (only while stopped: playing, the progression is what sounds) */
+static uint32_t audition_until;
+static void chord_audition(void)
+{
+    if (comp_playing)
+        return;
+    comp_post(EV_CHORD, song.prog[ui.slot].type, 48 + song.prog[ui.slot].root % 12u, 100);
+    audition_until = plat_ms() + 1800u;
+}
 
 static void clear_song(void)
 {
@@ -472,6 +500,24 @@ static void vturn(uint32_t id, int32_t e)
         break;
     case V_PRESET:
         ui.preset_hi = (uint8_t)clamp(ui.preset_hi + e, 0, NPRESETS - 1);
+        break;
+    case V_CH_ROOT:
+        song.prog[ui.slot].root = (uint8_t)((song.prog[ui.slot].root + 12 + e) % 12);
+        chord_audition();
+        song_dirty();
+        break;
+    case V_CH_TYPE:
+        song.prog[ui.slot].type = (uint8_t)clamp(song.prog[ui.slot].type + e, 0, CH_NOTES - 1);
+        chord_audition();
+        song_dirty();
+        break;
+    case V_CH_BARS:
+        song.prog[ui.slot].bars = (uint8_t)clamp(song.prog[ui.slot].bars + e, 1, 16);
+        song_dirty();
+        break;
+    case V_CH_COUNT:
+        song.prog_n = (uint8_t)clamp(song.prog_n + e, 1, NPROG);
+        song_dirty();
         break;
     case SV_TEST:
         test_mode = (uint8_t)clamp(test_mode + e, 0, 7);
@@ -837,8 +883,8 @@ static void button(uint32_t b)
     case B_SEQ:
         select_page(PG_SEQ);
         break;
-    case B_GLO:
-        select_page(PG_INFINITY);
+    case B_GLO:                          /* INFINITY, and again: its CHORDS */
+        select_page(ui.page == PG_INFINITY ? PG_CHORDS : PG_INFINITY);
         break;
     case B_FX:
         select_page(PG_FX);
@@ -927,6 +973,18 @@ static void input(void)
                 ui.key_note[k] = -1;
                 continue;
             }
+            if (ui.page == PG_CHORDS) {  /* a key: this slot's root; heard; on to the next slot */
+                song.prog[ui.slot].root = (uint8_t)((53u + k) % 12u);
+                if (ui.slot + 1u > song.prog_n)
+                    song.prog_n = (uint8_t)(ui.slot + 1u);
+                P[G_PROG] = PROG_MINE;
+                chord_audition();
+                ui.slot = (uint8_t)((ui.slot + 1u) % NPROG);
+                song_dirty();
+                ui.key_note[k] = -1;
+                ui.redraw_main = ui.redraw_cards = 1;
+                continue;
+            }
             if (set.lock)
                 note = scale_quantize(note);
             ui.key_note[k] = note;
@@ -982,6 +1040,10 @@ static void input(void)
                 break;
             case PG_INFINITY:
                 knob(0, e);              /* the mood */
+                break;
+            case PG_CHORDS:              /* the slot */
+                ui.slot = (uint8_t)clamp((int32_t)ui.slot + e, 0, NPROG - 1);
+                ui.redraw_main = ui.redraw_cards = 1;
                 break;
             default: {                   /* an engine or other page: the track's volume */
                 uint32_t id = TRK_P(page_track(), 0);
@@ -1505,6 +1567,44 @@ static void draw_infinity(void)
     cv_blit(0, 36);
 }
 
+static void draw_chords(void)
+{
+    uint32_t i;
+    char t[24], n[8];
+    cv_begin(240, 140, C_BLACK);
+    cv_text(8, 2, &FONT_XS, P[G_PROG] == PROG_MINE ? "INFINITY PLAYS YOUR CHORDS" : "INFINITY PLAYS ITS OWN (K1 ROW 2: MINE)",
+            P[G_PROG] == PROG_MINE ? PINK : GREY);
+    for (i = 0; i < NPROG; i++) {        /* the eight slots, two rows of four */
+        const prog_t *pg = &song.prog[i];
+        int32_t x = 6 + (int32_t)(i % 4u) * 58, y = 18 + (int32_t)(i / 4u) * 50;
+        int on = i < song.prog_n, sel = i == ui.slot, play = comp_playing && comp_prog_i == i;
+        static const char *const SFX[NCHORDS] = {"", " MAJ7", " MIN7", " ADD9", " SUS2", " SUS4", " MIN9", " 5",
+                                                 " QRTL", ""};
+        if (sel)
+            cv_rect(x, y, 54, 44, PINK_DEEP);
+        cv_rect(x, y + 43, 54, 1, play ? PINK : on ? DIMG : RULE);
+        if (play)
+            cv_rect(x, y + 41, 54, 3, PINK);
+        int_text((int32_t)i + 1, n);
+        cv_text(x + 3, y + 2, &FONT_XS, n, sel ? PINK : DIMG);
+        if (!on) {
+            cv_text(x + 3, y + 18, &FONT_B, "-", RULE);
+            continue;
+        }
+        t[0] = 0;
+        text_cat(t, NOTE_NAME[pg->root % 12u]);
+        cv_text(x + 3, y + 13, &FONT_B, t, sel ? PINK_HI : INK);
+        t[0] = 0;
+        text_cat(t, pg->type == CH_AUTO ? " AUTO" : SFX[pg->type % NCHORDS]);
+        cv_text(x + 3, y + 30, &FONT_XS, t + 1, sel ? PINK : GREY);
+        int_text(pg->bars, n);
+        text_cat(n, "B");
+        cv_text(x + 38, y + 2, &FONT_XS, n, DIMG);
+    }
+    cv_text(8, 122, &FONT_XS, "KEYS: A CHORD INTO THE SLOT   PRESET: SLOT", DIMG);
+    cv_blit(0, 36);
+}
+
 static void draw_fx(void)
 {
     char t[24];
@@ -1598,6 +1698,9 @@ static void draw_main(void)
     case PG_INFINITY:
         draw_infinity();
         break;
+    case PG_CHORDS:
+        draw_chords();
+        break;
     case PG_FX:
         draw_fx();
         break;
@@ -1646,7 +1749,7 @@ static void lights(void)
     b |= (uint32_t)(ui.page == PG_HOME) << B_HOME;
     b |= (uint32_t)(ui.page >= PG_SYNTH && ui.page <= PG_ECHO) << B_EDIT;
     b |= (uint32_t)(ui.page == PG_SEQ) << B_SEQ;
-    b |= (uint32_t)(ui.page == PG_INFINITY) << B_GLO;
+    b |= (uint32_t)(ui.page == PG_INFINITY || ui.page == PG_CHORDS) << B_GLO;
     b |= (uint32_t)(ui.page == PG_FX) << B_FX;
     b |= (uint32_t)(ui.page == PG_PRESETS) << B_SEL;
     b |= (uint32_t)(P[D_HOLD] != 0) << B_ENV;
@@ -1710,6 +1813,10 @@ void app_frame(void)
             ui.redraw_head = 1;
         }
     }
+    if (audition_until && now >= audition_until) {   /* the CHORDS page's audition lets go */
+        audition_until = 0;
+        comp_post(EV_CHORD_OFF, 0, 0, 0);
+    }
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0;
         ui.redraw_head = 1;
@@ -1721,7 +1828,8 @@ void app_frame(void)
     /* what moves on its own: the step, the chord, the bar, the transport */
     {
         uint32_t st = comp_step[ui.track] | (uint32_t)comp_playing << 8 | (uint32_t)comp_play_pat[ui.track] << 9;
-        uint32_t ch = (uint32_t)(comp_chord_root_pc + 1) | (uint32_t)comp_chord_type << 8 | (uint32_t)comp_section << 16;
+        uint32_t ch = (uint32_t)(comp_chord_root_pc + 1) | (uint32_t)comp_chord_type << 8 | (uint32_t)comp_section << 16
+                      | (uint32_t)comp_prog_i << 24;
         if (st != ui.seen_step) {
             ui.seen_step = st;
             ui.redraw_head = 1;
@@ -1731,7 +1839,7 @@ void app_frame(void)
         if (ch != ui.seen_chord || comp_bar != ui.seen_bar) {
             ui.seen_chord = ch;
             ui.seen_bar = comp_bar;
-            if (ui.page == PG_HOME || ui.page == PG_INFINITY)
+            if (ui.page == PG_HOME || ui.page == PG_INFINITY || ui.page == PG_CHORDS)
                 ui.redraw_main = 1;
         }
         for (i = 0; i < NTRACK; i++)
@@ -1798,6 +1906,12 @@ int app_expect(const char *what, int *got)
         *got = (int)comp_bar;
     else if (!strcmp(what, "drone_note"))   /* the drone's root now, as a MIDI note */
         *got = (int)(12.0f * fm_log2f(fm_maxf(dsp_drone_hz, 8.0f) / 440.0f) + 69.5f);
+    else if (!strcmp(what, "prog_n"))
+        *got = song.prog_n;
+    else if (!strcmp(what, "prog_i"))
+        *got = comp_prog_i;
+    else if (!strcmp(what, "prog_mine"))
+        *got = P[G_PROG];
     else if (!strcmp(what, "model"))
         *got = P[E_MODEL];
     else if (!strcmp(what, "mode"))

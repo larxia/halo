@@ -15,6 +15,7 @@ volatile int32_t comp_chord[4];
 volatile uint8_t comp_chord_n, comp_chord_deg;
 volatile uint32_t comp_bar, comp_beat16;
 volatile float comp_energy;
+volatile uint8_t comp_prog_i = 0xFFu;
 volatile uint8_t comp_section;
 volatile uint32_t comp_note_flash[NTRACK];
 volatile uint8_t comp_held_mask;
@@ -438,6 +439,7 @@ static struct {
     uint8_t ost[16], ost_len;          /* the ostinato: indexes into the chord, one an 8th or a 16th */
     uint8_t phrase_on;                 /* the melody is in a phrase (1) or resting (0) */
     uint32_t phrase_until, lh_at;      /* lh: the piano's left hand, its second note */
+    uint32_t prog_next;                /* MINE: the next slot of the progression */
     int32_t lh_note;
 } inf;
 
@@ -561,19 +563,34 @@ static void inf_next_chord(uint32_t now, int first)
     float ev = u7(G_EVOL), rnd = u7(G_RAND);
     int32_t root;
     uint32_t type, bars;
-    if (!first) {
-        uint32_t from = (uint32_t)(((inf.deg % (int32_t)s->n) + (int32_t)s->n) % (int32_t)s->n);
-        inf.deg = (int32_t)pick_weighted(m->w + 7u * (from % 7u), s->n, rnd);
+    if (P[G_PROG] == PROG_MINE && song.prog_n) {   /* the player's own progression, in order, each for its bars */
+        const prog_t *pg;
+        if (first)
+            inf.prog_next = 0;
+        pg = &song.prog[inf.prog_next % song.prog_n];
+        comp_prog_i = (uint8_t)(inf.prog_next % song.prog_n);
+        inf.prog_next = (inf.prog_next + 1u) % song.prog_n;
+        root = 48 + (int32_t)(pg->root % 12u);
+        type = pg->type < CH_NOTES ? pg->type : CH_AUTO;
+        inf.deg = note_degree(scale_quantize(root), 48);   /* the melody leans on this chord */
+        play_chord(root, type, comp_energy > 0.28f);
+        bars = pg->bars ? pg->bars : 2u;
     } else {
-        inf.deg = 0;
+        comp_prog_i = 0xFFu;
+        if (!first) {
+            uint32_t from = (uint32_t)(((inf.deg % (int32_t)s->n) + (int32_t)s->n) % (int32_t)s->n);
+            inf.deg = (int32_t)pick_weighted(m->w + 7u * (from % 7u), s->n, rnd);
+        } else {
+            inf.deg = 0;
+        }
+        root = degree_note(inf.deg, 48);
+        type = inf_chord_type(root);
+        play_chord(root, type, comp_energy > 0.28f);
+        /* how long it lasts: EVOLVE short, low EVOLVE long; randomness varies it */
+        bars = 8u - (uint32_t)(ev * 6.0f);
+        if (crndf() < rnd * 0.5f)
+            bars = crndf() < 0.5f ? bars / 2u + 1u : bars + 2u;
     }
-    root = degree_note(inf.deg, 48);
-    type = inf_chord_type(root);
-    play_chord(root, type, comp_energy > 0.28f);
-    /* how long it lasts: EVOLVE short, low EVOLVE long; randomness varies it */
-    bars = 8u - (uint32_t)(ev * 6.0f);
-    if (crndf() < rnd * 0.5f)
-        bars = crndf() < 0.5f ? bars / 2u + 1u : bars + 2u;
     inf.chord_len = bars * BAR;
     inf.next_chord = now + inf.chord_len;
     /* the drone: on the tonic, now and then lifting to the chord's root */
@@ -623,6 +640,7 @@ static void inf_start(uint32_t now)
 static void inf_stop(void)
 {
     inf.on = 0;
+    comp_prog_i = 0xFFu;
     inf_aria_release();
     chord_release();
     dsp_release_all(TR_ECHO);
@@ -1026,6 +1044,13 @@ static void events(void)
             if (!P[D_HOLD] && !held_n[TR_DRONE] && !(comp_playing))
                 dsp_release_all(TR_DRONE);
             break;
+        case EV_CHORD:                 /* the CHORDS page: a slot heard */
+            play_chord(note, t < CH_NOTES ? t : CH_AUTO, 1);
+            break;
+        case EV_CHORD_OFF:
+            if (!comp_playing)
+                chord_release();
+            break;
         case EV_PANIC:
             pend_clear();
             transport(0);
@@ -1085,6 +1110,16 @@ void comp_init(void)
                 }
                 for (i = 0; i < NAUTO; i++)
                     song.t[t].aut[p][i] = 0xFF;
+            }
+        }
+        {   /* a progression to start from, in the key: I, vi, IV, V (maj7, min7, maj7, sus2), two bars each */
+            static const uint8_t DEG[4] = {0, 9, 5, 7}, TYP[4] = {CH_MAJ7, CH_MIN7, CH_MAJ7, CH_SUS2};
+            song.prog_n = 4;
+            for (i = 0; i < NPROG; i++) {
+                song.prog[i].root = (uint8_t)((P[G_KEY] + DEG[i % 4u]) % 12u);
+                song.prog[i].type = TYP[i % 4u];
+                song.prog[i].bars = 2;
+                song.prog[i].rsv = 0;
             }
         }
     }

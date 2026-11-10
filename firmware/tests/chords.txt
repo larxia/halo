@@ -1,0 +1,30 @@
+# The CHORDS page: four keys make four chords (and switch INFINITY to them); playing, it walks the slots in order.
+master 3000
+wait 600
+tap GLO
+tap GLO
+expect page 8
+expect prog_mine 0
+tapkey 0
+wait 300
+expect prog_mine 1
+tapkey 5
+wait 300
+tapkey 3
+wait 300
+tapkey 7
+wait 2500
+expect prog_n 4
+shot chords.png
+tap PLAY
+wait 5000
+expect prog_i 0
+wait 4000
+expect prog_i 1
+wait 16000
+expect prog_i 3
+wait 6000
+expect prog_i 0
+expect chord_n 4
+shot chords_playing.png
+tap PLAY

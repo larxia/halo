@@ -30,7 +30,7 @@ chord generator, and **INFINITY**, which composes by itself in a mood you choose
 | K1–K4 | the four values of the row | HOME row 1: the macros |
 | HOME | HOME page | held: white keys 1–5 solo, black keys 1–5 mute tracks |
 | EDIT | next engine page (SYNTH → DRONE → SHIMMER → ARIA → ECHO) | |
-| SEQ / GLO / FX / SEL | SEQUENCE / INFINITY / FX / PRESETS page | PRESETS: SEL loads the highlighted preset |
+| SEQ / GLO / FX / SEL | SEQUENCE / INFINITY (again: CHORDS) / FX / PRESETS page | PRESETS: SEL loads the highlighted preset |
 | ENV | DRONE HOLD on/off (lit when on) | |
 | LFO (hold) | FREEZE: the reverb holds its tail | |
 | ARP | the ECHO arpeggiator on/off | |
@@ -101,16 +101,26 @@ The three newest moods: **WISTFUL** (gentle, sparse, major: plain chords and lon
 **LANTERN** (pentatonic and rhythmic: ostinatos and a quiet beat over lush pads) and **ANALOG** (warm minor: a
 singing lead over soft chords).
 
+**CHORDS:** your own progression for INFINITY (GLO from INFINITY, or SELECT). Eight slots; PRESET picks one.
+Play a key and that slot becomes a chord on that root, you hear it, and the next slot is selected, so four keys in a
+row make a four-chord progression (and switch CHORDS to MINE). K1–K4: ROOT, TYPE (AUTO = the scale's own chord, or
+MAJ7, MIN7, ADD9, SUS2, SUS4, MIN9, OPEN 5TH, QUARTAL), BARS (how long it lasts, 1–16), SLOTS (how many play).
+Row 2: CHORDS (AUTO: INFINITY writes its own; MINE: it plays yours, in order, round and round), H.DRIFT (the voicings
+still drift inside your chords), KEY, TEMPO. Everything else INFINITY does (drone, shimmer, melody, choir, rests,
+pulse) follows your chords. The progression is saved with the song.
+
 **FX:** reverb (TYPE: HALL, CATHEDRAL, INFINITE, DARK, SHIMMER; SIZE, DECAY, DAMP, MOD, SHIMMER, LEVEL, LOCUT) ·
 delay (TIME in beats, FEEDBACK, TONE, WOW, MODE: TAPE or PINGPONG, LEVEL, TO REV) · CHORUS, PHASER, TREMOLO ·
 SATURATION, EXCITER, NOISE (with N.TONE and N.MOVE), OUTPUT · WARBLE (delay row 2): a slow tape wobble on the pitch
 of every engine, a few cents.
 
-**PRESETS:** 24 factory presets (docs/PRESETS.md). PRESET or K1 browse; SEL loads.
+**PRESETS:** 25 factory presets (25, LUSH CHORDS, is what a first boot loads) (docs/PRESETS.md). PRESET or K1 browse; SEL loads.
 
 **SETTINGS:** SCALE LOCK, VELOCITY, OCTAVE, MIDI IN (channels 1–5 to tracks 1–5, or OMNI to the selected track) ·
-QUALITY (AUTO lightens the engines under load; HIGH; ECO), CLEAR SONG and INIT SOUND (turn twice). The audio load
-is shown here.
+QUALITY (AUTO lightens the engines under load; HIGH; ECO), CLEAR SONG and INIT SOUND (turn twice), TEST (not saved:
+TONE, a plain 440 Hz beep past all of HALO's sound, to check the output itself; ATMOS…ECHO, one engine alone and dry;
+NO FX, the engines without effects). The audio load is shown here, and always in the header (top right: the load in
+%, then L or E while the engines are lightened, with the tempo beneath).
 
 ## MIDI
 

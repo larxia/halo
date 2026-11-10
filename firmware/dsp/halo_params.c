@@ -27,10 +27,11 @@ static const char *const T_CHORDS[] = {"AUTO", "MAJ7", "MIN7", "ADD9", "SUS2", "
 static const char *const T_MOODS[] = {"DREAM", "CELESTIAL", "MELANCHOLY", "DARK", "SERENE", "MYSTERIOUS", "NOSTALGIC",
                                       "WISTFUL", "LANTERN", "ANALOG"};
 static const char *const T_MODELS[] = {"FM", "PIANO", "LEAD"};
+static const char *const T_PROGS[] = {"AUTO", "MINE"};
 
 const char *const *const ENUM_TEXT[NENUMS] = {0, T_SHOCT, T_VOWEL, T_VOCT, T_RATIOS, T_ARPS, T_DIVS, T_AOCTS, T_RTYPE,
-                                              T_DTIME, T_DMODE, T_KEYS, SCALE_NAME, T_MODES, T_CHORDS, T_MOODS, T_MODELS};
-const uint8_t ENUM_COUNT[NENUMS] = {0, 2, 5, 2, 8, 6, 6, 3, 5, 8, 2, 12, NSCALES, 2, NCHORDS, NMOODS, 3};
+                                              T_DTIME, T_DMODE, T_KEYS, SCALE_NAME, T_MODES, T_CHORDS, T_MOODS, T_MODELS, T_PROGS};
+const uint8_t ENUM_COUNT[NENUMS] = {0, 2, 5, 2, 8, 6, 6, 3, 5, 8, 2, 12, NSCALES, 2, NCHORDS, NMOODS, 3, 2};
 
 uint32_t param_max(uint32_t id)
 {

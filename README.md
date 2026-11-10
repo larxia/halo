@@ -14,7 +14,7 @@ HALO turns the FM-1 into an instrument for ambient music. It has five sound engi
 
 Around them sit a probability step sequencer with a voice-leading chord generator and harmonic drift, a reverb,
 delay and modulation section, four performance macros (SPACE, MOTION, SHIMMER, DEPTH), and **INFINITY**: press PLAY
-and it composes, forever, in one of ten moods, with ostinatos, rests and a soft beat when the mood calls for them.
+and it composes, forever, in one of ten moods (its own chords, or a progression you play into the CHORDS page), with ostinatos, rests and a soft beat when the mood calls for them.
 
 > **Status 0.2.0: compiles for the FM-1; not yet run on one.** The FM-1 package builds on GitHub Actions (image
 > 189 KB, RAM 44 KB of 96, pool 292 KB of 336) and every test passes in fm1-base's host simulator. CPU load is
@@ -22,7 +22,7 @@ and it composes, forever, in one of ten moods, with ostinatos, rests and a soft 
 
 ## Quick start
 
-1. Turn **PRESET** to choose one of 24 atmospheres. Press **PLAY**.
+1. Turn **PRESET** to choose one of 25 atmospheres. Press **PLAY**.
 2. Turn **K1–K4** (SPACE, MOTION, SHIMMER, DEPTH). Play the keys. Hold **LFO** to freeze the room.
 3. **EDIT** steps through the engines, **SEQ** opens the sequencer, **GLO** opens INFINITY. See
    [docs/MANUAL.md](docs/MANUAL.md).
@@ -34,7 +34,7 @@ and it composes, forever, in one of ten moods, with ostinatos, rests and a soft 
 | `firmware/app.c`, `app.h` | the UI: 11 pages on the 240×240 screen, keys, encoders, MIDI, saving, backup |
 | `firmware/dsp/halo_dsp.c` | the engines, the mixer and the effects (float32, compiled at -O2) |
 | `firmware/dsp/halo_comp.c` | the clock, sequencer, chord generator, arpeggiator and INFINITY |
-| `firmware/dsp/halo_params.*` | every parameter, its range and display, and the 24 factory presets |
+| `firmware/dsp/halo_params.*` | every parameter, its range and display, and the 25 factory presets |
 | `firmware/tests/` | simulator scripts, audio analysis, the CPU estimate |
 | `base/` | [fm1-base](https://github.com/charlesvestal/fm1-base) (a submodule, MPL-2.0) on [felucca-bsp](https://github.com/hugelton/felucca-bsp) |
 | `docs/` | [architecture and hardware verification](docs/ARCHITECTURE.md), [manual](docs/MANUAL.md), [presets](docs/PRESETS.md), [testing](docs/TESTING.md), [deployment](docs/DEPLOY.md) |

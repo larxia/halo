@@ -30,15 +30,20 @@ typedef struct {
     uint8_t aut[NPAT][NAUTO];          /* 0xFF = no point */
 } track_seq_t;
 
-#define SONG_MAGIC 0x484C4F53u         /* "SOLH" */
+#define SONG_MAGIC 0x324C4F53u         /* "SOL2": 0.3 added the progression */
+#define NPROG 8
+typedef struct { uint8_t root, type, bars, rsv; } prog_t;   /* root: pitch class 0..11; type CH_AUTO..CH_QUARTAL */
 typedef struct {
     uint32_t magic;
     track_seq_t t[NTRACK];
+    uint8_t prog_n, rsv[3];            /* the CHORDS page: how many of the slots play, in order */
+    prog_t prog[NPROG];
 } song_t;
 extern song_t song;
 
 /* the main loop's events */
-enum { EV_NOTE_ON, EV_NOTE_OFF, EV_PLAY, EV_STOP, EV_PANIC, EV_RELEASE_TRACK, EV_DRONE_HOLD };
+enum { EV_NOTE_ON, EV_NOTE_OFF, EV_PLAY, EV_STOP, EV_PANIC, EV_RELEASE_TRACK, EV_DRONE_HOLD, EV_CHORD, EV_CHORD_OFF };
+/* EV_CHORD: a chord heard on the pad (note: its root, track: its type), EV_CHORD_OFF: let go (the CHORDS page) */
 void comp_post(uint32_t type, uint32_t track, int32_t note, uint32_t vel);
 
 void comp_init(void);
@@ -55,6 +60,7 @@ extern volatile int32_t comp_chord[4];
 extern volatile uint8_t comp_chord_n, comp_chord_deg;
 extern volatile uint32_t comp_bar, comp_beat16;
 extern volatile float comp_energy;
+extern volatile uint8_t comp_prog_i;   /* MINE: the slot playing (0xFF none) */
 extern volatile uint8_t comp_section;   /* INFINITY: 0 intro, 1 bloom, 2 song, 3 thin, 4 swell */
 extern volatile uint32_t comp_note_flash[NTRACK];   /* a counter per track: a note started (the screen pulses) */
 extern volatile uint8_t comp_held_mask;             /* tracks with a key held (keyboard) */
