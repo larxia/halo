@@ -3,6 +3,9 @@ master 3000
 wait 800
 shot boot.png
 expect page 0
+expect preset 24
+turn PRESET -30
+wait 100
 expect preset 0
 jack in
 wav infinity_pale_horizon.wav
@@ -86,3 +89,14 @@ wait 50
 restore out:halo_backup.halo
 wait 300
 expect preset 1
+# SETTINGS TEST: the tone, an engine alone, back off
+turn SELECT 20
+expect page 10
+turn ALGO 1
+turn K4 1
+wav test_tone.wav
+wait 1500
+wavstop
+turn K4 1
+turn K4 -2
+wait 100

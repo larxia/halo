@@ -252,6 +252,16 @@ const preset_t PRESETS[NPRESETS] = {
         {E_DEC, 96}, {E_REL, 60}, {E_TONE, 84}, {T5_VOL, 96}, {T5_DLY, 16}, {T5_REV, 70}, {T1_VOL, 56},
         {A_CUT, 60}, {A_AIR, 20}, {T2_VOL, 0}, {S_INT, 30}, {T4_VOL, 50}, {R_SIZE, 76}, {R_DECAY, 84},
         {X_WARBLE, 34}, {X_NOISE, 18}, {X_NTONE, 30}, {X_SAT, 20}, {X_MASTER, 116})},
+    /* 25: the plainest, lushest thing HALO does, and what a first boot loads: wide chords, nothing noisy */
+    {"LUSH CHORDS", "WIDE DETUNED CHORDS, CHORUS, A LONG HALL",
+     PV({G_MOOD, MOOD_DREAM}, {G_KEY, 2}, {G_SCALE, 0}, {G_TEMPO, 34}, {G_CHORD, CH_MAJ7}, {G_DRIFT, 60},
+        {G_DENS, 18}, {G_REST, 60}, {G_CPLX, 30}, {G_PULSE, 0}, {G_BEAT, 0}, {A_SHAPE, 104}, {A_DETUNE, 62},
+        {A_AIR, 26}, {A_SUB, 30}, {A_CUT, 74}, {A_RES, 8}, {A_ENV, 70}, {A_ATK, 74}, {A_DEC, 90}, {A_SUS, 112},
+        {A_REL, 100}, {A_LFOR, 20}, {A_LFOD, 24}, {A_MORPH, 20}, {A_WIDTH, 127}, {T1_VOL, 104}, {T1_REV, 84},
+        {T2_VOL, 44}, {D_GRAIN, 0}, {D_GRIT, 0}, {D_WOBBLE, 20}, {S_INT, 30}, {S_SPARK, 16}, {T4_VOL, 0},
+        {E_MODEL, EM_PIANO}, {E_INDEX, 30}, {E_TONE, 70}, {T5_VOL, 60}, {C_DEPTH, 72}, {C_RATE, 16},
+        {R_TYPE, RT_HALL}, {R_SIZE, 104}, {R_DECAY, 100}, {R_DAMP, 56}, {R_SHIM, 0}, {X_NOISE, 0}, {X_EXCITE, 0},
+        {X_SAT, 6}, {L_LEVEL, 50})},
 };
 
 void preset_apply(uint32_t i)

@@ -20,7 +20,7 @@
 
 volatile uint8_t dsp_mute, dsp_solo, dsp_quality = 2, dsp_drone_gate;
 volatile float dsp_tempo_bpm = 72.0f;
-volatile uint8_t dsp_speaker;
+volatile uint8_t dsp_speaker, dsp_test;
 volatile float dsp_meter[NTRACK], dsp_out_meter, dsp_drone_hz;
 volatile uint32_t dsp_beats;
 
@@ -1801,6 +1801,10 @@ void dsp_process(float *l, float *r, uint32_t n)
     }
     /* the renders run from RAM (out of the flash cache's way); flash code calls them through PLAT_FAR, as a direct
      * call may not reach (fm1-base plat.h) */
+    if (dsp_test >= 2u && dsp_test <= 6u)   /* TEST: one engine alone */
+        for (t = 0; t < NTRACK; t++)
+            if (t != dsp_test - 2u)
+                tr_live[t] = 0;
     if (tr_live[TR_ATMOS])
         PLAT_FAR(atmos_run)(tr_l[TR_ATMOS], tr_r[TR_ATMOS], n);
     if (tr_live[TR_DRONE])
@@ -1831,10 +1835,17 @@ void dsp_process(float *l, float *r, uint32_t n)
                                  rev_in_r, dl_in_l, dl_in_r, n);
         dsp_meter[t] += (pk - dsp_meter[t]) * (pk > dsp_meter[t] ? 0.3f : 0.02f);
     }
-    PLAT_FAR(beat_run)(l, r, rev_in_l, rev_in_r, n);
-    PLAT_FAR(delay_run)(dl_in_l, dl_in_r, l, r, rev_in_l, rev_in_r, n);
-    PLAT_FAR(reverb_run)(rev_in_l, rev_in_r, l, r, n);
-    PLAT_FAR(master_run)(l, r, n);
+    if (dsp_test >= 2u) {                /* TEST: dry, no effects, only a hard limit */
+        for (k = 0; k < n; k++) {
+            l[k] = fmi_clampf(l[k], -0.9f, 0.9f);
+            r[k] = fmi_clampf(r[k], -0.9f, 0.9f);
+        }
+    } else {
+        PLAT_FAR(beat_run)(l, r, rev_in_l, rev_in_r, n);
+        PLAT_FAR(delay_run)(dl_in_l, dl_in_r, l, r, rev_in_l, rev_in_r, n);
+        PLAT_FAR(reverb_run)(rev_in_l, rev_in_r, l, r, n);
+        PLAT_FAR(master_run)(l, r, n);
+    }
     for (k = 0; k < n; k++)
         out_peak = fmi_maxf(out_peak, fmi_fabsf(l[k]));
     dsp_out_meter += (out_peak - dsp_out_meter) * (out_peak > dsp_out_meter ? 0.3f : 0.02f);

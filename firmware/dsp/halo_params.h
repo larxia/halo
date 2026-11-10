@@ -26,18 +26,18 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(D_SUB,    "SUB",    56, F_PCT,  0) X(D_FIFTH,  "FIFTH",  30, F_PCT,  0) \
     X(D_MOTION, "MOTION", 44, F_PCT,  0) X(D_TONE,   "TONE",   56, F_PCT,  0) \
     X(D_BEAT,   "BEAT",   36, F_PCT,  0) X(D_GLIDE,  "GLIDE",  70, F_TIME, 0) \
-    X(D_GRAIN,  "GRAIN",  24, F_PCT,  0) X(D_GRIT,   "GRIT",    6, F_PCT,  0) \
+    X(D_GRAIN,  "GRAIN",   0, F_PCT,  0) X(D_GRIT,   "GRIT",    6, F_PCT,  0) \
     X(D_CUT,    "CUTOFF", 84, F_CUT,  0) X(D_WOBBLE, "WOBBLE", 40, F_PCT,  0) \
     X(D_HOLD,   "HOLD",    1, F_BOOL, 0) X(D_ATK,    "F.IN",   96, F_TIME, 0) \
     X(D_REL,    "F.OUT", 100, F_TIME, 0) X(D_FOLLOW, "FOLLOW",  1, F_BOOL, 0) \
     /* ---- SHIMMER (track 3) ---- */ \
     X(S_INT,    "INTENS", 64, F_PCT,  0) X(S_BRIGHT, "BRIGHT", 58, F_PCT,  0) \
-    X(S_SPARK,  "SPARKL", 40, F_PCT,  0) X(S_DIFF,   "DIFFUS", 70, F_PCT,  0) \
+    X(S_SPARK,  "SPARKL", 24, F_PCT,  0) X(S_DIFF,   "DIFFUS", 70, F_PCT,  0) \
     X(S_ATK,    "ATTACK", 90, F_TIME, 0) X(S_REL,    "RELEAS",100, F_TIME, 0) \
     X(S_OCT,    "OCTAVE",  0, F_ENUM, E_SHOCT) X(S_FDBK, "FEEDBK", 34, F_PCT, 0) \
     /* ---- ARIA: the choir (track 4) ---- */ \
-    X(V_VOWEL,  "VOWEL",   0, F_ENUM, E_VOWEL) X(V_DRIFT, "V.DRFT", 40, F_PCT, 0) \
-    X(V_DRATE,  "V.RATE", 24, F_HZ,   0) X(V_BREATH, "BREATH", 30, F_PCT,  0) \
+    X(V_VOWEL,  "VOWEL",   0, F_ENUM, E_VOWEL) X(V_DRIFT, "V.DRFT", 30, F_PCT, 0) \
+    X(V_DRATE,  "V.RATE", 24, F_HZ,   0) X(V_BREATH, "BREATH", 12, F_PCT,  0) \
     X(V_VIB,    "VIBRAT", 30, F_PCT,  0) X(V_VRATE,  "V.SPEED",54, F_HZ,   0) \
     X(V_ENS,    "ENSMBL", 56, F_PCT,  0) X(V_FORM,   "FORMNT", 80, F_PCT,  0) \
     X(V_ATK,    "ATTACK", 84, F_TIME, 0) X(V_REL,    "RELEAS", 92, F_TIME, 0) \
@@ -54,7 +54,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     /* ---- FX ---- */ \
     X(R_TYPE,   "REVERB",  0, F_ENUM, E_RTYPE) X(R_SIZE, "SIZE",  84, F_PCT, 0) \
     X(R_DECAY,  "DECAY",  88, F_PCT,  0) X(R_DAMP,   "DAMP",   46, F_PCT,  0) \
-    X(R_MOD,    "MOD",    44, F_PCT,  0) X(R_SHIM,   "SHIMMR", 20, F_PCT,  0) \
+    X(R_MOD,    "MOD",    44, F_PCT,  0) X(R_SHIM,   "SHIMMR",  6, F_PCT,  0) \
     X(R_LEVEL,  "LEVEL", 100, F_PCT,  0) X(R_LOCUT,  "LOCUT",  24, F_PCT,  0) \
     X(L_TIME,   "TIME",    5, F_ENUM, E_DTIME) X(L_FDBK, "FEEDBK", 70, F_PCT, 0) \
     X(L_TONE,   "TONE",   60, F_PCT,  0) X(L_WOW,    "WOW",    36, F_PCT,  0) \
@@ -63,7 +63,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(C_DEPTH,  "CHORUS", 34, F_PCT,  0) X(C_RATE,   "C.RATE", 18, F_HZ,   0) \
     X(H_AMT,    "PHASER",  0, F_PCT,  0) X(H_RATE,   "P.RATE", 10, F_HZ,   0) \
     X(T_DEPTH,  "TREMOL",  0, F_PCT,  0) X(T_RATE,   "T.RATE", 40, F_HZ,   0) \
-    X(X_SAT,    "SATUR",  14, F_PCT,  0) X(X_EXCITE, "EXCITE", 10, F_PCT,  0) \
+    X(X_SAT,    "SATUR",   8, F_PCT,  0) X(X_EXCITE, "EXCITE",  0, F_PCT,  0) \
     X(X_NOISE,  "NOISE",   0, F_PCT,  0) X(X_NTONE,  "N.TONE", 40, F_PCT,  0) \
     X(X_NMOVE,  "N.MOVE", 40, F_PCT,  0) X(X_MASTER, "OUTPUT", 88, F_PCT,  0) \
     /* ---- track mix: volume, pan, reverb send, delay send ---- */ \
@@ -125,7 +125,7 @@ typedef struct {
     const pv_t *pv;
     uint8_t n;
 } preset_t;
-#define NPRESETS 24
+#define NPRESETS 25
 extern const preset_t PRESETS[NPRESETS];
 void params_defaults(void);
 void preset_apply(uint32_t i);

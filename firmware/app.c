@@ -52,6 +52,9 @@ typedef struct {
 } sound_rec_t;
 
 static uint8_t dirty;
+/* SETTINGS TEST (not saved): 1 a plain 440 Hz tone straight to the output, past every HALO sound (does the output
+ * path itself sound clean?); 2..6 one engine alone, dry; 7 every engine, no effects */
+static uint8_t test_mode;
 
 /* ------------------------------------------------------------------- pages --- */
 enum { PG_HOME, PG_SYNTH, PG_DRONE, PG_SHIMMER, PG_ARIA, PG_ECHO, PG_SEQ, PG_INFINITY, PG_FX, PG_PRESETS, PG_SETTINGS,
@@ -63,7 +66,7 @@ static const char *const TRACK_SHORT[NTRACK] = {"PAD", "DRN", "SHM", "ARI", "ECH
 
 /* virtual values (not in P[]): the sequencer's step and track, and settings */
 enum { V_NONE = 255, V_STEP_NOTE = 200, V_STEP_ON, V_STEP_PROB, V_STEP_LEN, V_TRK_LEN, V_TRK_DIV, V_TRK_CHAIN, V_TRK_GEN,
-       V_PAT, V_AUTO_ID, V_AUTO_VAL, V_TRACK, SV_LOCK, SV_VEL, SV_QUAL, SV_MIDI, SV_OCT, SV_CLEAR, SV_INIT, V_PRESET };
+       V_PAT, V_AUTO_ID, V_AUTO_VAL, V_TRACK, SV_LOCK, SV_VEL, SV_QUAL, SV_MIDI, SV_OCT, SV_CLEAR, SV_INIT, V_PRESET, SV_TEST };
 
 #define MAXROWS 7
 typedef struct {
@@ -98,7 +101,7 @@ static const page_rows_t ROWS[NPAGES] = {
       {L_MODE, L_LEVEL, L_TOREV, X_WARBLE}, {C_DEPTH, C_RATE, H_AMT, H_RATE}, {T_DEPTH, T_RATE, X_SAT, X_EXCITE},
       {X_NOISE, X_NTONE, X_NMOVE, X_MASTER}}},
     {1, {"FACTORY"}, {{V_PRESET, V_NONE, V_NONE, V_NONE}}},
-    {2, {"PLAYING", "SYSTEM"}, {{SV_LOCK, SV_VEL, SV_OCT, SV_MIDI}, {SV_QUAL, SV_CLEAR, SV_INIT, V_NONE}}},
+    {2, {"PLAYING", "SYSTEM"}, {{SV_LOCK, SV_VEL, SV_OCT, SV_MIDI}, {SV_QUAL, SV_CLEAR, SV_INIT, SV_TEST}}},
 };
 
 static struct {
@@ -231,6 +234,7 @@ static const char *vlabel(uint32_t id)
     case SV_CLEAR: return "CLR SONG";
     case SV_INIT: return "INIT SND";
     case V_PRESET: return "PRESET";
+    case SV_TEST: return "TEST";
     default: return "";
     }
 }
@@ -324,6 +328,11 @@ static void vtext(uint32_t id, char *t)
     case V_PRESET:
         int_text(ui.preset_hi + 1, t);
         break;
+    case SV_TEST: {
+        static const char *const TN[8] = {"OFF", "TONE", "ATMOS", "DRONE", "SHIMMR", "ARIA", "ECHO", "NO FX"};
+        text_cat(t, TN[test_mode % 8u]);
+        break;
+    }
     default:
         break;
     }
@@ -464,6 +473,10 @@ static void vturn(uint32_t id, int32_t e)
     case V_PRESET:
         ui.preset_hi = (uint8_t)clamp(ui.preset_hi + e, 0, NPRESETS - 1);
         break;
+    case SV_TEST:
+        test_mode = (uint8_t)clamp(test_mode + e, 0, 7);
+        dsp_test = test_mode >= 2u ? test_mode : 0u;
+        break;
     default:
         break;
     }
@@ -521,7 +534,7 @@ static void settings_defaults(void)
     set.vel = 1;
     set.qual = 0;
     set.midi = 0;
-    set.preset = 0;
+    set.preset = NPRESETS - 1u;          /* LUSH CHORDS at a first boot */
     set.track = TR_ATMOS;
 }
 
@@ -584,6 +597,21 @@ void app_backup_restored(void)
 #define HALO_FULL_SCALE 4194304.0f
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
+    if (test_mode == 1u) {               /* TEST TONE: a sine at -12 dB of the clean scale, nothing else */
+        static float ph;
+        uint32_t i;
+        float g = (float)master_q12 * (1.0f / 4096.0f) * HALO_FULL_SCALE * 0.25f;
+        for (i = 0; i < n; i++) {
+            int32_t v;
+            ph += 440.0f / 44100.0f;
+            if (ph >= 1.0f)
+                ph -= 1.0f;
+            v = (int32_t)(fm_sin_turns(ph) * g);
+            lr[2u * i] = v;
+            lr[2u * i + 1u] = v;
+        }
+        return;
+    }
     halo_render(lr, n, (float)master_q12 * (1.0f / 4096.0f) * HALO_FULL_SCALE);
 }
 

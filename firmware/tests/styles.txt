@@ -2,6 +2,8 @@
 # rests between phrases.
 master 3000
 wait 600
+turn PRESET -30
+wait 100
 turn PRESET 20
 wait 200
 expect preset 20

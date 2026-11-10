@@ -1,6 +1,8 @@
 # The composer: INFINITY brings in every layer over a few minutes; SEQUENCE plays the chords written in its steps.
 master 3000
 wait 600
+turn PRESET -30
+wait 100
 tap PLAY
 wait 150000
 expect playing 1

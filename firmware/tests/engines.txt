@@ -1,6 +1,8 @@
 # Each engine on its own, a note or chord held, recorded: tests/analyse.py reads the files.
 master 3000
 wait 600
+turn PRESET -30
+wait 100
 tap EDIT
 expect page 1
 wav e1_atmos.wav
