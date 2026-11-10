@@ -11,7 +11,7 @@
  *   ECHO  ─┘                                                    exciter, noise layer, saturation, limiter
  */
 #include "halo_dsp.h"
-#include "fastmath.h"
+#include "halo_fastmath.h"   /* fm1-base's maths, forced inline: the render runs from RAM */
 #include "plat.h"
 
 #define FS HALO_FS
@@ -56,39 +56,40 @@ static inline __attribute__((always_inline)) float rndf(void) { return (float)(r
 static inline __attribute__((always_inline)) float rnds(void) { return rndf() * 2.0f - 1.0f; }                        /* -1..1 */
 
 static float warble_semi;               /* the tape's wobble, in semitones, for every engine (X_WARBLE) */
-static inline float note_hz(float note) { return 440.0f * fm_exp2f((note + warble_semi - 69.0f) * (1.0f / 12.0f)); }
-static inline float u7(uint32_t id) { return (float)P[id] * (1.0f / 127.0f); }                 /* 0..1 */
-static inline float b7(uint32_t id) { return ((float)P[id] - 64.0f) * (1.0f / 63.0f); }        /* -1..1 */
+static inline __attribute__((always_inline)) float note_hz(float note) { return 440.0f * fmi_exp2f((note + warble_semi - 69.0f) * (1.0f / 12.0f)); }
+static inline __attribute__((always_inline)) float u7(uint32_t id) { return (float)P[id] * (1.0f / 127.0f); }                 /* 0..1 */
+static inline __attribute__((always_inline)) float b7(uint32_t id) { return ((float)P[id] - 64.0f) * (1.0f / 63.0f); }        /* -1..1 */
 /* a 0..127 value as a time: 3 ms .. ~20 s, exponential */
-static inline float v_time(float v01) { return 0.003f * fm_exp2f(v01 * 12.7f); }
+static inline __attribute__((always_inline)) float v_time(float v01) { return 0.003f * fmi_exp2f(v01 * 12.7f); }
 /* one-pole coefficient for a time constant in seconds (per sample) */
-static inline float tc(float sec) { return 1.0f - fm_expf(-INV_FS / fm_maxf(sec, 0.0005f)); }
+static inline __attribute__((always_inline)) float tc(float sec) { return 1.0f - fmi_expf(-INV_FS / fmi_maxf(sec, 0.0005f)); }
 /* a 0..1 cutoff position as Hz: 30 Hz .. ~19 kHz */
-static inline float v_cut(float v01) { return 30.0f * fm_exp2f(fm_clampf(v01, 0.0f, 1.0f) * 9.3f); }
+static inline __attribute__((always_inline)) float v_cut(float v01) { return 30.0f * fmi_exp2f(fmi_clampf(v01, 0.0f, 1.0f) * 9.3f); }
 /* LFO rates: 0.01 .. ~10 Hz */
-static inline float v_hz(float v01) { return 0.01f * fm_exp2f(v01 * 10.0f); }
+static inline __attribute__((always_inline)) float v_hz(float v01) { return 0.01f * fmi_exp2f(v01 * 10.0f); }
 
 /* a state-variable filter (Simper's trapezoidal form): stable under fast coefficient changes */
 typedef struct { float ic1, ic2; } svf_t;
 typedef struct { float a1, a2, a3, k; } svfc_t;
 static void svf_set(svfc_t *c, float hz, float res01)
 {
-    float g = fm_tanf(3.14159265f * fm_clampf(hz, 20.0f, 0.45f * FS) * INV_FS);
-    c->k = 2.0f - 1.94f * fm_clampf(res01, 0.0f, 1.0f);
+    float g = fmi_tanf(3.14159265f * fmi_clampf(hz, 20.0f, 0.45f * FS) * INV_FS);
+    c->k = 2.0f - 1.94f * fmi_clampf(res01, 0.0f, 1.0f);
     c->a1 = 1.0f / (1.0f + g * (g + c->k));
     c->a2 = g * c->a1;
     c->a3 = g * c->a2;
 }
+/* (+1e-20: a floor under the states, so a decaying filter never reaches denormal numbers, slow on some FPUs) */
 static inline __attribute__((always_inline)) float svf_lp(svf_t *s, const svfc_t *c, float v0)
 {
-    float v3 = v0 - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
+    float v3 = v0 + 1e-20f - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
     s->ic1 = 2.0f * v1 - s->ic1;
     s->ic2 = 2.0f * v2 - s->ic2;
     return v2;
 }
 static inline __attribute__((always_inline)) float svf_bp(svf_t *s, const svfc_t *c, float v0)   /* unity peak */
 {
-    float v3 = v0 - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
+    float v3 = v0 + 1e-20f - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
     s->ic1 = 2.0f * v1 - s->ic1;
     s->ic2 = 2.0f * v2 - s->ic2;
     return c->k * v1;
@@ -109,7 +110,7 @@ static inline __attribute__((always_inline)) float blep(float t, float dt)
 }
 static inline __attribute__((always_inline)) float osc_morph(float ph, float dt, float shape)
 {
-    float s = sin_t(ph), tri = 1.0f - 4.0f * fm_fabsf(ph - 0.5f);
+    float s = sin_t(ph), tri = 1.0f - 4.0f * fmi_fabsf(ph - 0.5f);
     if (shape < 0.5f)
         return s + (tri - s) * (shape * 2.0f);
     {
@@ -157,14 +158,14 @@ static inline __attribute__((always_inline)) float eg_run(eg_t *e, const egc_t *
  * fixed-pitch sine partial (drone, shimmer, the pad's air and sub, grains). Its amplitude is renormalised once a
  * chunk (mc_norm) so hours of running, or a gliding frequency, never let it drift. */
 typedef struct { float x, y; } mc_t;
-static inline float mc_e(float hz) { return 2.0f * fm_sin_turns(fm_minf(hz, 0.45f * FS) * 0.5f * INV_FS); }
+static inline __attribute__((always_inline)) float mc_e(float hz) { return 2.0f * fmi_sin_turns(fmi_minf(hz, 0.45f * FS) * 0.5f * INV_FS); }
 static inline __attribute__((always_inline)) float mc_run(mc_t *o, float e)
 {
     o->x -= e * o->y;
     o->y += e * o->x;
     return o->y;
 }
-static inline void mc_norm(mc_t *o, float e)
+static inline __attribute__((always_inline)) void mc_norm(mc_t *o, float e)
 {
     float inv = o->x * o->x + o->y * o->y - e * o->x * o->y, g;
     if (inv < 1e-6f) {                 /* stopped (never started, or flushed): a fresh start */
@@ -176,25 +177,25 @@ static inline void mc_norm(mc_t *o, float e)
     o->x *= g;
     o->y *= g;
 }
-static inline void mc_start(mc_t *o, float turns)
+static inline __attribute__((always_inline)) void mc_start(mc_t *o, float turns)
 {
-    o->x = fm_sin_turns(turns + 0.25f);
-    o->y = fm_sin_turns(turns);
+    o->x = fmi_sin_turns(turns + 0.25f);
+    o->y = fmi_sin_turns(turns);
 }
 
 /* an envelope stepped once per chunk with chunk-sized coefficients, its value interpolated across the chunk */
 static void eg_chunkify(egc_t *out, const egc_t *in)
 {
-    out->a = 1.0f - fm_powf(1.0f - in->a, (float)HALO_CHUNK);
-    out->d = 1.0f - fm_powf(1.0f - in->d, (float)HALO_CHUNK);
-    out->r = 1.0f - fm_powf(1.0f - in->r, (float)HALO_CHUNK);
+    out->a = 1.0f - fmi_powf(1.0f - in->a, (float)HALO_CHUNK);
+    out->d = 1.0f - fmi_powf(1.0f - in->d, (float)HALO_CHUNK);
+    out->r = 1.0f - fmi_powf(1.0f - in->r, (float)HALO_CHUNK);
     out->s = in->s;
 }
 
 /* equal-power pan: p -1..1 */
-static inline void pan_gains(float p, float *gl, float *gr)
+static inline __attribute__((always_inline)) void pan_gains(float p, float *gl, float *gr)
 {
-    float a = (fm_clampf(p, -1.0f, 1.0f) + 1.0f) * 0.25f;     /* 0..0.5 turns of a quarter circle */
+    float a = (fmi_clampf(p, -1.0f, 1.0f) + 1.0f) * 0.25f;     /* 0..0.5 turns of a quarter circle */
     *gl = sin_t(0.25f - a * 0.5f);                           /* cos */
     *gr = sin_t(a * 0.5f);
 }
@@ -223,7 +224,7 @@ static void atmos_cook(void)
 {
     uint32_t i;
     float lfo, morph, base, envamt = b7(A_ENV), res = u7(A_RES) * 0.92f;
-    float motion = fm_exp2f(mac_motion * 1.6f);
+    float motion = fmi_exp2f(mac_motion * 1.6f);
     atm.eg.a = tc(v_time(u7(A_ATK)) * 0.35f);
     atm.eg.d = tc(v_time(u7(A_DEC)) * 0.35f);
     atm.eg.s = u7(A_SUS);
@@ -233,18 +234,18 @@ static void atmos_cook(void)
     atm.morph_ph = wrap1(atm.morph_ph + 0.031f * motion * (float)HALO_CHUNK * INV_FS);
     lfo = sin_t(atm.lfo_ph);
     morph = sin_t(atm.morph_ph) * u7(A_MORPH) * 0.5f;           /* the shape wanders: wavetable-style movement */
-    atm.shape = fm_clampf(u7(A_SHAPE) + morph, 0.0f, 1.0f);
+    atm.shape = fmi_clampf(u7(A_SHAPE) + morph, 0.0f, 1.0f);
     {
         float d = u7(A_DETUNE) * u7(A_DETUNE) * 0.35f;           /* up to ~35 cents */
-        atm.det[0] = fm_exp2f(-d / 12.0f);
+        atm.det[0] = fmi_exp2f(-d / 12.0f);
         atm.det[1] = 1.0f;
-        atm.det[2] = fm_exp2f(d * 1.07f / 12.0f);
+        atm.det[2] = fmi_exp2f(d * 1.07f / 12.0f);
     }
-    atm.air = u7(A_AIR) * (0.55f + 0.45f * fm_maxf(mac_shim, -0.9f));
-    atm.sub = u7(A_SUB) * (1.0f + 0.8f * fm_maxf(mac_depth, 0.0f));
+    atm.air = u7(A_AIR) * (0.55f + 0.45f * fmi_maxf(mac_shim, -0.9f));
+    atm.sub = u7(A_SUB) * (1.0f + 0.8f * fmi_maxf(mac_depth, 0.0f));
     atm.width = u7(A_WIDTH);
-    atm.glide = fm_minf(tc(0.45f) * (float)HALO_CHUNK, 1.0f);        /* ~0.45 s glide between chords */
-    base = u7(A_CUT) - 0.22f * fm_maxf(mac_depth, 0.0f) + 0.12f * fm_maxf(mac_shim, 0.0f)
+    atm.glide = fmi_minf(tc(0.45f) * (float)HALO_CHUNK, 1.0f);        /* ~0.45 s glide between chords */
+    base = u7(A_CUT) - 0.22f * fmi_maxf(mac_depth, 0.0f) + 0.12f * fmi_maxf(mac_shim, 0.0f)
            + lfo * u7(A_LFOD) * 0.25f;
     for (i = 0; i < ATMOS_VOICES; i++) {
         pad_voice_t *v = &atm.v[i];
@@ -310,10 +311,11 @@ static void atmos_off(int32_t note)
             atm.v[i].eg.st = EG_REL;
 }
 
-static void atmos_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void atmos_run(float *l, float *r, uint32_t n)
 {
-    uint32_t i, k, o, nosc = dsp_quality >= 2u ? 3u : 2u;
-    float shape = atm.shape, air = atm.air * 0.35f, sub = atm.sub * 0.45f;
+    /* quality: FULL three oscillators a voice, LIGHT two, LIGHTEST one and no air or sub layers */
+    uint32_t i, k, o, nosc = dsp_quality >= 2u ? 3u : dsp_quality == 1u ? 2u : 1u;
+    float shape = atm.shape, air = dsp_quality ? atm.air * 0.35f : 0.0f, sub = dsp_quality ? atm.sub * 0.45f : 0.0f;
     /* the morph is between two waveforms at a time: only those two are computed */
     int upper = shape >= 0.5f;
     float wb = upper ? shape * 2.0f - 1.0f : shape * 2.0f, wa = 1.0f - wb;
@@ -330,7 +332,7 @@ static void atmos_run(float *l, float *r, uint32_t n)
         mc_norm(&v->air, ea);
         mc_norm(&v->sub, eb);
         pan_gains(v->pan * atm.width, &gl, &gr);
-        g = (0.20f + 0.10f * v->vel) * (nosc == 3u ? 0.80f : 1.0f);
+        g = (0.20f + 0.10f * v->vel) * (nosc == 3u ? 0.80f : nosc == 2u ? 1.0f : 1.4f);
         e0 = v->eg.v;
         e1 = eg_run(&v->eg, &atm.eg32);
         de = (e1 - e0) / (float)n;
@@ -341,7 +343,7 @@ static void atmos_run(float *l, float *r, uint32_t n)
                 if (ph >= 1.0f)
                     ph -= 1.0f;
                 v->ph[o] = ph;
-                tri = 1.0f - 4.0f * fm_fabsf(ph - 0.5f);
+                tri = 1.0f - 4.0f * fmi_fabsf(ph - 0.5f);
                 if (upper) {
                     b = 2.0f * ph - 1.0f - blep(ph, inc[o]);
                 } else {
@@ -384,16 +386,16 @@ static struct {
 static void drone_cook(void)
 {
     uint32_t i;
-    float motion = u7(D_MOTION) * fm_exp2f(mac_motion * 1.5f), tilt = u7(D_TONE);
+    float motion = u7(D_MOTION) * fmi_exp2f(mac_motion * 1.5f), tilt = u7(D_TONE);
     float glide_s = v_time(u7(D_GLIDE)) * 0.5f;
     dr.glide = tc(glide_s) * (float)HALO_CHUNK;
-    dr.root += (dr.root_to - dr.root) * fm_minf(dr.glide, 1.0f);
+    dr.root += (dr.root_to - dr.root) * fmi_minf(dr.glide, 1.0f);
     dr.level_a = tc(v_time(u7(D_ATK)) * 0.35f);
     dr.level_r = tc(v_time(u7(D_REL)) * 0.35f);
     dsp_drone_hz = note_hz(dr.root);
     /* each partial wanders toward a random level: a new aim now and then (MOTION), brighter partials quieter (TONE) */
     for (i = 0; i < DR_PARTS; i++) {
-        float t = fm_powf(DR_HARM[i], -1.6f + tilt * 1.3f);
+        float t = fmi_powf(DR_HARM[i], -1.6f + tilt * 1.3f);
         if (rndf() < motion * 0.010f + 0.0005f)
             dr.amp_to[i] = t * (0.25f + 0.75f * rndf());
         dr.amp[i] += (dr.amp_to[i] - dr.amp[i]) * (0.004f + motion * 0.03f);
@@ -402,7 +404,7 @@ static void drone_cook(void)
     if (rndf() < 0.01f + motion * 0.03f)
         dr.wob_to = rnds() * u7(D_WOBBLE) * 0.30f;
     dr.wob += (dr.wob_to - dr.wob) * (0.002f + motion * 0.01f);
-    svf_set(&dr.cut, v_cut(u7(D_CUT) - 0.25f * fm_maxf(mac_depth, 0.0f) + dr.wob), 0.25f + u7(D_WOBBLE) * 0.3f);
+    svf_set(&dr.cut, v_cut(u7(D_CUT) - 0.25f * fmi_maxf(mac_depth, 0.0f) + dr.wob), 0.25f + u7(D_WOBBLE) * 0.3f);
     dr.clock++;
 }
 
@@ -413,7 +415,7 @@ static void drone_set_root(int32_t note, int jump)
         dr.root = (float)note;
 }
 
-static void drone_grain_spawn(void)
+static inline __attribute__((always_inline)) void drone_grain_spawn(void)
 {
     uint32_t i;
     for (i = 0; i < DR_GRAINS; i++)
@@ -422,7 +424,7 @@ static void drone_grain_spawn(void)
             static const float OCT[4] = {1.0f, 2.0f, 2.0f, 4.0f};
             float dur = 0.06f + 0.40f * rndf();
             g->on = 1;
-            g->e = mc_e(note_hz(dr.root) * DR_HARM[rnd() % 6u] * OCT[rnd() & 3u]);
+            g->e = mc_e(note_hz(dr.root) * DR_HARM[((rnd() >> 8) * 6u) >> 24] * OCT[rnd() & 3u]);   /* (no divide) */
             mc_start(&g->o, rndf());
             g->env_ph = 0.0f;
             g->env_inc = INV_FS / dur;
@@ -432,18 +434,18 @@ static void drone_grain_spawn(void)
         }
 }
 
-static void drone_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void drone_run(float *l, float *r, uint32_t n)
 {
     uint32_t i, k, nparts, ntw;
-    float dens = u7(D_DENS) * (1.0f + 0.5f * fm_maxf(mac_depth, 0.0f)), hz = note_hz(dr.root);
-    float beat = u7(D_BEAT) * 1.2f + 0.02f, sub = u7(D_SUB) * (0.6f + 0.6f * fm_maxf(mac_depth, -0.6f));
+    float dens = u7(D_DENS) * (1.0f + 0.5f * fmi_maxf(mac_depth, 0.0f)), hz = note_hz(dr.root);
+    float beat = u7(D_BEAT) * 1.2f + 0.02f, sub = u7(D_SUB) * (0.6f + 0.6f * fmi_maxf(mac_depth, -0.6f));
     float fifth = u7(D_FIFTH) * 0.07f, grit = u7(D_GRIT), grain = u7(D_GRAIN), gate = dsp_drone_gate ? 1.0f : 0.0f;
     float e[DR_PARTS], et[DR_TWINS], wl[DR_PARTS], wr[DR_PARTS];
     /* the sub octave and the low fifth only where they are audible (a low root's would be below 30 Hz) */
     float es = mc_e(hz * 0.5f >= 30.0f ? hz * 0.5f : hz), e5 = mc_e(hz * 1.5f),
           e5lo = mc_e(hz * 0.75f >= 30.0f ? hz * 0.75f : hz * 1.5f);
     float inc_g0 = hz * INV_FS, inc_g1 = hz * 1.0041f * INV_FS;
-    float fpart = fm_clampf(dens, 0.0f, 1.0f) * (float)(DR_PARTS - 1) + 1.0f;
+    float fpart = fmi_clampf(dens, 0.0f, 1.0f) * (float)(DR_PARTS - 1) + 1.0f;
     float sub_g = sub * 0.30f, grit_g = grit * 0.06f, lv, dlv;
     if (gate == 0.0f && dr.level < 0.00005f) {
         dr.level = 0.0f;
@@ -454,11 +456,13 @@ static void drone_run(float *l, float *r, uint32_t n)
         nparts = DR_PARTS;
     if (dsp_quality < 2u && nparts > 5u)
         nparts = 5u;
+    if (dsp_quality < 1u && nparts > 3u)
+        nparts = 3u;
     ntw = nparts < DR_TWINS ? nparts : DR_TWINS;
     if (dsp_quality < 1u)
-        ntw = 2u;
+        ntw = 1u;
     for (i = 0; i < nparts; i++) {
-        float f = hz * DR_HARM[i], fade = fm_clampf(fpart - (float)i, 0.0f, 1.0f), pl, pr, a;
+        float f = hz * DR_HARM[i], fade = fmi_clampf(fpart - (float)i, 0.0f, 1.0f), pl, pr, a;
         if (f > 16000.0f)
             fade = 0.0f;
         e[i] = mc_e(f);
@@ -487,7 +491,7 @@ static void drone_run(float *l, float *r, uint32_t n)
             mc_norm(&dr.gr[i].o, dr.gr[i].e);
     /* the fade, one step a chunk, interpolated */
     lv = dr.level;
-    dr.level += (gate - dr.level) * (1.0f - fm_powf(1.0f - (gate > dr.level ? dr.level_a : dr.level_r), (float)n));
+    dr.level += (gate - dr.level) * (1.0f - fmi_powf(1.0f - (gate > dr.level ? dr.level_a : dr.level_r), (float)n));
     dlv = (dr.level - lv) / (float)n;
     for (k = 0; k < n; k++) {
         float sl = 0.0f, sr = 0.0f, m;
@@ -554,7 +558,7 @@ static struct {
 static void shim_cook(void)
 {
     uint32_t i, j;
-    float br = u7(S_BRIGHT) + 0.3f * fm_maxf(mac_shim, 0.0f), spark = u7(S_SPARK) * fm_exp2f(mac_motion);
+    float br = u7(S_BRIGHT) + 0.3f * fmi_maxf(mac_shim, 0.0f), spark = u7(S_SPARK) * fmi_exp2f(mac_motion);
     float oct = P[S_OCT] ? 2.0f : 1.0f;
     sh.mul[0] = 4.0f * oct;            /* two octaves up, two octaves and a fifth, three octaves */
     sh.mul[1] = 6.0f * oct;
@@ -610,7 +614,7 @@ static void shim_off(int32_t note)
             sh.s[i].eg.st = EG_REL;
 }
 
-static void shim_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void shim_run(float *l, float *r, uint32_t n)
 {
     uint32_t i, j, k, na = 0;
     float g = u7(S_INT) * (0.5f + 0.5f * (mac_shim + 1.0f)) * 0.20f, diff = u7(S_DIFF) * 0.7f;
@@ -627,7 +631,7 @@ static void shim_run(float *l, float *r, uint32_t n)
         hz = note_hz(sl->pitch);
         e0 = sl->eg.v;
         e1 = eg_run(&sl->eg, &sh.eg32);
-        for (j = 0; j < SH_PARTS; j++) {
+        for (j = 0; j < (dsp_quality >= 2u ? SH_PARTS : dsp_quality == 1u ? 2u : 1u); j++) {
             float f = hz * sh.mul[j], a = f < 14000.0f ? sh.wgt[j] * (0.15f + 0.85f * sl->tw[j]) * g * (f > 9000.0f ? 0.5f : 1.0f)
                                                     : 0.0f;
             if (a <= 0.0f)
@@ -698,7 +702,7 @@ static void aria_cook(void)
     uint32_t j;
     float vw, f, shift, q;
     uint32_t a;
-    float motion = fm_exp2f(mac_motion * 1.4f);
+    float motion = fmi_exp2f(mac_motion * 1.4f);
     ar.eg.a = tc(v_time(u7(V_ATK)) * 0.35f);
     ar.eg.d = ar.eg.a;
     ar.eg.s = 1.0f;
@@ -713,7 +717,7 @@ static void aria_cook(void)
         vw -= 5.0f;
     a = (uint32_t)vw;
     f = vw - (float)a;
-    shift = fm_exp2f((u7(V_FORM) - 0.6f) * 0.9f);           /* FORMNT: lower = darker, a male choir */
+    shift = fmi_exp2f((u7(V_FORM) - 0.6f) * 0.9f);           /* FORMNT: lower = darker, a male choir */
     q = 0.55f + u7(V_BRIGHT) * 0.25f;
     for (j = 0; j < 3u; j++) {
         float hz = (VOWEL_F[a][j] + (VOWEL_F[(a + 1u) % 5u][j] - VOWEL_F[a][j]) * f) * shift;
@@ -760,19 +764,17 @@ static void aria_off(int32_t note)
             ar.v[i].eg.st = EG_REL;
 }
 
-static void aria_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void aria_run(float *l, float *r, uint32_t n)
 {
     uint32_t i, k, j, any = 0;
     float vib_depth = u7(V_VIB) * 0.012f, vib_inc = (2.0f + u7(V_VRATE) * 5.0f) * INV_FS;
     float ens = u7(V_ENS) * 0.012f, breath = u7(V_BREATH) * 0.5f, oct = P[V_OCT] ? 12.0f : 0.0f;
-    float lpa = ar.src_lp_a, keep = 1.0f - breath * 0.6f;
-    for (k = 0; k < n; k++)
-        ar.src_l[k] = ar.src_r[k] = 0.0f;
+    float lpa = ar.src_lp_a, keep = 1.0f - breath * 0.6f;   /* (src_l, src_r zeroed by the caller: no memset here) */
     /* the voices' sources (two saws and breath each), panned into two sums */
     for (i = 0; i < ARIA_VOICES; i++) {
         aria_voice_t *v = &ar.v[i];
         float hz, gl, gr, e0, e1, de, f0b, f1b, vib, f0, f1, g;
-        if (v->eg.st == EG_IDLE)
+        if (v->eg.st == EG_IDLE || (dsp_quality == 0u && i >= 2u))   /* LIGHTEST: two voices */
             continue;
         any = 1;
         hz = note_hz((float)v->note + oct);
@@ -803,7 +805,7 @@ static void aria_run(float *l, float *r, uint32_t n)
             ar.src_r[k] += src * gr;
         }
     }
-    if (!any && fm_fabsf(ar.tone_l.ic1) + fm_fabsf(ar.tone_l.ic2) < 1e-6f)
+    if (!any && fmi_fabsf(ar.tone_l.ic1) + fmi_fabsf(ar.tone_l.ic2) < 1e-6f)
         return;
     /* the formants, once for all voices; then BRIGHT: a gentle one-pole, so a low setting sounds distant */
     for (k = 0; k < n; k++) {
@@ -854,14 +856,14 @@ static void echo_cook(void)
     ec.eg.s = u7(E_SUS);
     ec.eg.r = tc(v_time(u7(E_REL)) * 0.3f);
     ec.idec = tc(v_time(u7(E_IDEC)) * 0.25f);
-    ec.tone_a = 1.0f - fm_expf(-TWO_PI * fm_minf(v_cut(u7(E_TONE)), 18000.0f) * INV_FS);
-    ec.glide = fm_minf(tc(v_time(u7(E_GLIDE)) * 0.12f) * (float)HALO_CHUNK, 1.0f);
+    ec.tone_a = 1.0f - fmi_expf(-TWO_PI * fmi_minf(v_cut(u7(E_TONE)), 18000.0f) * INV_FS);
+    ec.glide = fmi_minf(tc(v_time(u7(E_GLIDE)) * 0.12f) * (float)HALO_CHUNK, 1.0f);
     if (P[E_MODEL] == EM_LEAD) {       /* the lead's filter: TONE, its envelope, the key; RESO on the second stage */
         echo_voice_t *v = &ec.v[0];
         float c = u7(E_TONE) + u7(E_INDEX) * v->fenv * 0.45f + ((float)v->note - 60.0f) * 0.0025f;
         svf_set(&ec.lf1, v_cut(c), 0.1f);
         svf_set(&ec.lf2, v_cut(c), u7(E_RES) * 0.88f);
-        v->fenv -= v->fenv * fm_minf(ec.idec * (float)HALO_CHUNK, 1.0f);
+        v->fenv -= v->fenv * fmi_minf(ec.idec * (float)HALO_CHUNK, 1.0f);
     }
 }
 
@@ -931,15 +933,15 @@ static void echo_on(int32_t note, uint32_t vel)
         v->eg.st = EG_ATK;
         if (P[E_MODEL] == EM_PIANO) {
             /* the hammer: harder with velocity (INDEX); the decay shorter up the keyboard */
-            float key = fm_exp2f(((float)note - 60.0f) * (1.0f / 18.0f));
+            float key = fmi_exp2f(((float)note - 60.0f) * (1.0f / 18.0f));
             v->idx = (0.25f + 0.75f * v01) * (0.3f + u7(E_INDEX) * 1.6f);
             v->hammer = 0.25f + 0.5f * v01;
             v->bright = 1.0f;
             v->pe.a = tc(0.0025f);
-            v->pe.d = fm_minf(tc(v_time(u7(E_DEC)) * 0.9f + 0.4f) * key, 0.5f);
+            v->pe.d = fmi_minf(tc(v_time(u7(E_DEC)) * 0.9f + 0.4f) * key, 0.5f);
             v->pe.s = 0.0f;
             v->pe.r = ec.eg.r;
-            v->pan = fm_clampf(((float)note - 64.0f) * 0.025f, -0.6f, 0.6f);   /* low left, high right */
+            v->pan = fmi_clampf(((float)note - 64.0f) * 0.025f, -0.6f, 0.6f);   /* low left, high right */
         } else {
             v->idx = u7(E_INDEX) * (1.0f - vs * 0.5f + vs * 0.5f * v01) * 2.2f;
         }
@@ -972,7 +974,7 @@ static void echo_off(int32_t note)
 
 static inline __attribute__((always_inline)) float saw_b(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph, dt); }
 
-static void echo_lead_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void echo_lead_run(float *l, float *r, uint32_t n)
 {
     echo_voice_t *v = &ec.v[0];
     uint32_t k;
@@ -1002,7 +1004,7 @@ static void echo_lead_run(float *l, float *r, uint32_t n)
         /* oscillator 1 blends saw to square (a saw minus a half-turned saw); oscillator 2 is a saw, a touch sharp */
         s = saw_b(v->pc, i1) - sq * saw_b(p2, i1) + 0.6f * saw_b(v->pc2, i2);
         s = s * 0.6f;
-        s = s / (1.0f + fm_fabsf(s) * 0.5f);   /* drive into the filter: the warmth */
+        s = s / (1.0f + fmi_fabsf(s) * 0.5f);   /* drive into the filter: the warmth */
         y = svf_lp(&v->f2, &ec.lf2, svf_lp(&v->f1, &ec.lf1, s));
         y *= e * g;
         l[k] += y;
@@ -1010,7 +1012,7 @@ static void echo_lead_run(float *l, float *r, uint32_t n)
     }
 }
 
-static void echo_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void echo_run(float *l, float *r, uint32_t n)
 {
     uint32_t i, k, model = P[E_MODEL];
     float ratio = ECHO_RATIO[P[E_RATIO] & 7u], a = ec.tone_a;
@@ -1031,7 +1033,7 @@ static void echo_run(float *l, float *r, uint32_t n)
             em = mc_e(hz);
             mc_norm(&v->m, em);
             g = 0.62f * v->vel;
-            v->bright *= 1.0f - fm_minf(ec.idec * 0.5f * (float)n, 0.9f);   /* the tone dulls faster than it fades */
+            v->bright *= 1.0f - fmi_minf(ec.idec * 0.5f * (float)n, 0.9f);   /* the tone dulls faster than it fades */
             br1 = v->bright;
             dbr = (br1 - br0) / (float)n;
             for (k = 0; k < n; k++) {
@@ -1099,7 +1101,7 @@ void dsp_perc(uint32_t type, uint32_t vel)
     }
 }
 
-static void beat_run(float *l, float *r, float *rl, float *rr, uint32_t n)
+PLAT_RAM_CODE static void beat_run(float *l, float *r, float *rl, float *rr, uint32_t n)
 {
     uint32_t k;
     float lvl = u7(G_BEAT), tone = u7(G_BTONE);
@@ -1161,8 +1163,8 @@ static void reverb_cook(void)
     float size, decay, damp, t60;
     uint32_t type = P[R_TYPE];
     float sp = mac_space;
-    size = fm_clampf(u7(R_SIZE) + sp * 0.35f, 0.0f, 1.0f);
-    decay = fm_clampf(u7(R_DECAY) + sp * 0.35f, 0.0f, 1.0f);
+    size = fmi_clampf(u7(R_SIZE) + sp * 0.35f, 0.0f, 1.0f);
+    decay = fmi_clampf(u7(R_DECAY) + sp * 0.35f, 0.0f, 1.0f);
     damp = u7(R_DAMP);
     switch (type) {
     case RT_CATHEDRAL:
@@ -1181,21 +1183,21 @@ static void reverb_cook(void)
     default:
         break;
     }
-    damp = fm_clampf(damp + 0.25f * fm_maxf(mac_depth, 0.0f), 0.0f, 0.97f);
-    t60 = 0.6f * fm_exp2f(decay * 5.6f);                      /* 0.6 .. ~29 s */
+    damp = fmi_clampf(damp + 0.25f * fmi_maxf(mac_depth, 0.0f), 0.0f, 0.97f);
+    t60 = 0.6f * fmi_exp2f(decay * 5.6f);                      /* 0.6 .. ~29 s */
     for (i = 0; i < RV_LINES; i++) {
         float L;
         rv.len_to[i] = RV_BASE[i] * (0.45f + size * 1.05f);
         rv.len[i] += (rv.len_to[i] - rv.len[i]) * 0.02f;      /* a slow glide: a size change sweeps, never clicks */
         L = rv.len[i];
         rv.g[i] = type == RT_INFINITE && P[R_DECAY] > 100u ? 0.9985f
-                  : fm_exp2f(-3.0f * 3.3219281f * L / (t60 * FS));   /* 10^(-3L/(t60 fs)) */
+                  : fmi_exp2f(-3.0f * 3.3219281f * L / (t60 * FS));   /* 10^(-3L/(t60 fs)) */
     }
     rv.damp = 0.08f + (1.0f - damp) * 0.88f;                 /* the loop's one-pole: 1 = bright */
-    rv.mod_depth = 2.0f + u7(R_MOD) * 14.0f * fm_exp2f(mac_motion * 0.8f);
-    rv.shim = fm_clampf((u7(R_SHIM) + (type == RT_SHIMMER ? 0.35f : 0.0f)) * (0.6f + 0.6f * (mac_shim + 1.0f) * 0.5f
+    rv.mod_depth = 2.0f + u7(R_MOD) * 14.0f * fmi_exp2f(mac_motion * 0.8f);
+    rv.shim = fmi_clampf((u7(R_SHIM) + (type == RT_SHIMMER ? 0.35f : 0.0f)) * (0.6f + 0.6f * (mac_shim + 1.0f) * 0.5f
                         + u7(S_FDBK) * 0.4f), 0.0f, 0.95f) * 0.28f;
-    rv.hpa = 1.0f - fm_expf(-TWO_PI * (20.0f + u7(R_LOCUT) * 400.0f) * INV_FS);
+    rv.hpa = 1.0f - fmi_expf(-TWO_PI * (20.0f + u7(R_LOCUT) * 400.0f) * INV_FS);
     rv.level = u7(R_LEVEL) * 1.1f;
 }
 
@@ -1214,7 +1216,7 @@ static inline __attribute__((always_inline)) float rv_tap(uint32_t line, float d
     }
 }
 
-static void reverb_run(const float *il, const float *ir, float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void reverb_run(const float *il, const float *ir, float *l, float *r, uint32_t n)
 {
     uint32_t k, i;
     float mi[RV_LINES];
@@ -1230,7 +1232,7 @@ static void reverb_run(const float *il, const float *ir, float *l, float *r, uin
         /* low cut on the way in: a muddy bottom never builds up in a long tail */
         rv.hp_l += (il[k] - rv.hp_l) * rv.hpa;
         rv.hp_r += (ir[k] - rv.hp_r) * rv.hpa;
-        x = (il[k] - rv.hp_l + ir[k] - rv.hp_r) * 0.5f;
+        x = (il[k] - rv.hp_l + ir[k] - rv.hp_r) * 0.5f + 1e-18f;   /* a floor: the tail never decays into denormals */
         for (i = 0; i < 4u; i++) {          /* input diffusion */
             uint32_t L = RV_AP_LEN[i], p = rv.apw[i];
             float y = rv_ap[i][p];
@@ -1251,7 +1253,7 @@ static void reverb_run(const float *il, const float *ir, float *l, float *r, uin
         }
         /* the shimmer: line 0, band-limited, rectified (an octave up), fed back in */
         rv.shim_hp += (d[0] - rv.shim_hp) * 0.02f;
-        sm = fm_fabsf(d[0] - rv.shim_hp);
+        sm = fmi_fabsf(d[0] - rv.shim_hp);
         rv.shim_lp += (sm - rv.shim_lp) * 0.25f;
         sm = (sm - rv.shim_lp * 0.98f) * rv.shim;
         h0 = d[0] + d[1];
@@ -1260,9 +1262,9 @@ static void reverb_run(const float *il, const float *ir, float *l, float *r, uin
         h3 = d[2] - d[3];
         /* the loop's gain is below 1 by construction (Hadamard / 2, line gains < 1); only the shimmer can add,
          * so the two lines it feeds are held within bounds */
-        rv_buf[0][rv.w] = fm_clampf((h0 + h2) * 0.5f + x + sm, -4.0f, 4.0f);
+        rv_buf[0][rv.w] = fmi_clampf((h0 + h2) * 0.5f + x + sm, -4.0f, 4.0f);
         rv_buf[1][rv.w] = (h1 + h3) * 0.5f + x * 0.85f;
-        rv_buf[2][rv.w] = fm_clampf((h0 - h2) * 0.5f + x * 0.75f + sm, -4.0f, 4.0f);
+        rv_buf[2][rv.w] = fmi_clampf((h0 - h2) * 0.5f + x * 0.75f + sm, -4.0f, 4.0f);
         rv_buf[3][rv.w] = (h1 - h3) * 0.5f + x * 0.9f;
         if (++rv.w >= RV_MAX)
             rv.w = 0;
@@ -1286,17 +1288,17 @@ static struct {
 
 static void delay_cook(void)
 {
-    float beats = DL_DIV[P[L_TIME] & 7u], sec = beats * 60.0f / fm_maxf(dsp_tempo_bpm, 20.0f);
+    float beats = DL_DIV[P[L_TIME] & 7u], sec = beats * 60.0f / fmi_maxf(dsp_tempo_bpm, 20.0f);
     while (sec > 1.45f)
         sec *= 0.5f;
     dl.time_to = sec * FS * 0.5f;                            /* in half-rate samples */
-    dl.fb = fm_clampf(u7(L_FDBK) * 0.97f + mac_space * 0.08f, 0.0f, 0.97f);
+    dl.fb = fmi_clampf(u7(L_FDBK) * 0.97f + mac_space * 0.08f, 0.0f, 0.97f);
     dl.tone = 0.05f + u7(L_TONE) * 0.7f;
     dl.wow = u7(L_WOW) * 18.0f;
     dl.level = u7(L_LEVEL);
 }
 
-static inline float dl_read(uint32_t ch, float pos)
+static inline __attribute__((always_inline)) float dl_read(uint32_t ch, float pos)
 {
     uint32_t i0, i1;
     float f;
@@ -1308,7 +1310,7 @@ static inline float dl_read(uint32_t ch, float pos)
     return ((float)dl_buf[ch][i0] + (float)(dl_buf[ch][i1] - dl_buf[ch][i0]) * f) * (1.0f / 16384.0f);
 }
 
-static void delay_run(const float *il, const float *ir, float *l, float *r, float *to_rev_l, float *to_rev_r,
+PLAT_RAM_CODE static void delay_run(const float *il, const float *ir, float *l, float *r, float *to_rev_l, float *to_rev_r,
                       uint32_t n)
 {
     uint32_t k;
@@ -1338,10 +1340,10 @@ static void delay_run(const float *il, const float *ir, float *l, float *r, floa
                 wl = dl.in_l * 0.5f + rl * dl.fb;
                 wr = dl.in_r * 0.5f + rr * dl.fb;
             }
-            wl = wl / (1.0f + fm_fabsf(wl) * 0.3f);          /* tape saturation in the loop */
-            wr = wr / (1.0f + fm_fabsf(wr) * 0.3f);
-            dl_buf[0][dl.w] = (int16_t)fm_clampf(wl * 16384.0f, -32767.0f, 32767.0f);
-            dl_buf[1][dl.w] = (int16_t)fm_clampf(wr * 16384.0f, -32767.0f, 32767.0f);
+            wl = wl / (1.0f + fmi_fabsf(wl) * 0.3f);          /* tape saturation in the loop */
+            wr = wr / (1.0f + fmi_fabsf(wr) * 0.3f);
+            dl_buf[0][dl.w] = (int16_t)fmi_clampf(wl * 16384.0f, -32767.0f, 32767.0f);
+            dl_buf[1][dl.w] = (int16_t)fmi_clampf(wr * 16384.0f, -32767.0f, 32767.0f);
             dl.w = (dl.w + 1u) & (DL_N - 1u);
             dl.prev_l = dl.out_l;
             dl.prev_r = dl.out_r;
@@ -1376,7 +1378,7 @@ static struct {
 
 static void master_cook(void)
 {
-    float motion = fm_exp2f(mac_motion * 1.2f);
+    float motion = fmi_exp2f(mac_motion * 1.2f);
     ms.depth = u7(C_DEPTH) * 220.0f;
     ms.rate = v_hz(u7(C_RATE)) * motion;
     ms.ph_amt = u7(H_AMT);
@@ -1391,13 +1393,13 @@ static void master_cook(void)
     ms.master = u7(X_MASTER) * 1.15f;
 }
 
-static void master_run(float *l, float *r, uint32_t n)
+PLAT_RAM_CODE static void master_run(float *l, float *r, uint32_t n)
 {
     uint32_t k, j, c;
-    float sat_norm = 1.0f / fm_tanhf(ms.sat * 0.5f), drive = ms.master * ms.sat * 0.5f, fn = (float)n;
+    float sat_norm = 1.0f / fmi_tanhf(ms.sat * 0.5f), drive = ms.master * ms.sat * 0.5f, fn = (float)n;
     /* the slow modulators move once a chunk; their values ramp across it */
     float cd0[2], cd1[2], pa0 = 0.0f, pa1 = 0.0f, tm0 = 1.0f, tm1 = 1.0f, ng0 = 0.0f, ng1 = 0.0f;
-    int chorus = ms.depth > 1.0f, phaser = ms.ph_amt > 0.01f, trem = ms.tr_depth > 0.01f, noise = ms.noise > 0.0f;
+    int chorus = ms.depth > 1.0f && dsp_quality, phaser = ms.ph_amt > 0.01f && dsp_quality, trem = ms.tr_depth > 0.01f, noise = ms.noise > 0.0f;
     int excite = ms.excite > 0.01f;
     for (c = 0; c < 2u; c++)
         cd0[c] = 300.0f + ms.depth * (1.0f + sin_t(ms.ph + (float)c * 0.25f));
@@ -1467,7 +1469,7 @@ static void master_run(float *l, float *r, uint32_t n)
                 float h;
                 ms.ex_hp[c] += (x[c] - ms.ex_hp[c]) * 0.35f;
                 h = x[c] - ms.ex_hp[c];
-                x[c] += (fm_fabsf(h) - 0.01f) * ms.excite * 0.6f + h * ms.excite * 0.4f;
+                x[c] += (fmi_fabsf(h) - 0.01f) * ms.excite * 0.6f + h * ms.excite * 0.4f;
             }
         ms.spk_mix += ((dsp_speaker ? 1.0f : 0.0f) - ms.spk_mix) * 0.0005f;
         if (ms.spk_mix > 0.001f)         /* the built-in speaker: 12 dB an octave under ~110 Hz */
@@ -1483,7 +1485,7 @@ static void master_run(float *l, float *r, uint32_t n)
             float y = x[c] - ms.dc_x[c] + 0.9993f * ms.dc_y[c];   /* DC blocker (~5 Hz): the rectifiers' offset */
             ms.dc_x[c] = x[c];
             ms.dc_y[c] = y;
-            x[c] = fm_tanhf(y * drive) * sat_norm * 0.92f;   /* saturation and the limiter in one */
+            x[c] = fmi_tanhf(y * drive) * sat_norm * 0.92f;   /* saturation and the limiter in one */
         }
         l[k] = x[0];
         r[k] = x[1];
@@ -1500,7 +1502,7 @@ void dsp_init(void)
 {
     uint32_t i;
     for (i = 0; i <= SIN_N; i++)
-        sin_tab[i] = fm_sin_turns((float)i / (float)SIN_N);
+        sin_tab[i] = fmi_sin_turns((float)i / (float)SIN_N);
     for (i = 0; i < RV_LINES; i++)
         rv.len[i] = RV_BASE[i];
     for (i = 0; i < ATMOS_VOICES; i++)
@@ -1741,6 +1743,29 @@ static void cook_all(void)
     }
 }
 
+/* one track into the buses, its gains ramped across the chunk (RAM code: the busiest loop after the engines) */
+PLAT_RAM_CODE static float mix_track(const float *tl, const float *tr, float g0, float g1, float d0, float d1,
+                                     float sr, float sd, float *l, float *r, float *rl, float *rr, float *dl_,
+                                     float *dr_, uint32_t n)
+{
+    uint32_t k;
+    float pk = 0.0f;
+    for (k = 0; k < n; k++) {
+        float a = tl[k] * g0, b = tr[k] * g1, m;
+        g0 += d0;
+        g1 += d1;
+        l[k] += a;
+        r[k] += b;
+        rl[k] += a * sr;
+        rr[k] += b * sr;
+        dl_[k] += a * sd;
+        dr_[k] += b * sd;
+        m = fmi_fabsf(a) + fmi_fabsf(b);
+        pk = m > pk ? m : pk;
+    }
+    return pk;
+}
+
 void dsp_process(float *l, float *r, uint32_t n)
 {
     uint32_t t, k;
@@ -1762,20 +1787,25 @@ void dsp_process(float *l, float *r, uint32_t n)
             for (k = 0; k < n; k++)
                 tr_l[t][k] = tr_r[t][k] = 0.0f;
     }
+    /* the renders run from RAM (out of the flash cache's way); flash code calls them through PLAT_FAR, as a direct
+     * call may not reach (fm1-base plat.h) */
     if (tr_live[TR_ATMOS])
-        atmos_run(tr_l[TR_ATMOS], tr_r[TR_ATMOS], n);
+        PLAT_FAR(atmos_run)(tr_l[TR_ATMOS], tr_r[TR_ATMOS], n);
     if (tr_live[TR_DRONE])
-        drone_run(tr_l[TR_DRONE], tr_r[TR_DRONE], n);
+        PLAT_FAR(drone_run)(tr_l[TR_DRONE], tr_r[TR_DRONE], n);
     if (tr_live[TR_SHIM])
-        shim_run(tr_l[TR_SHIM], tr_r[TR_SHIM], n);
-    if (tr_live[TR_ARIA])
-        aria_run(tr_l[TR_ARIA], tr_r[TR_ARIA], n);
+        PLAT_FAR(shim_run)(tr_l[TR_SHIM], tr_r[TR_SHIM], n);
+    if (tr_live[TR_ARIA]) {
+        for (k = 0; k < n; k++)
+            ar.src_l[k] = ar.src_r[k] = 0.0f;
+        PLAT_FAR(aria_run)(tr_l[TR_ARIA], tr_r[TR_ARIA], n);
+    }
     if (tr_live[TR_ECHO])
-        echo_run(tr_l[TR_ECHO], tr_r[TR_ECHO], n);
+        PLAT_FAR(echo_run)(tr_l[TR_ECHO], tr_r[TR_ECHO], n);
     for (k = 0; k < n; k++)
         l[k] = r[k] = rev_in_l[k] = rev_in_r[k] = dl_in_l[k] = dl_in_r[k] = 0.0f;
     for (t = 0; t < NTRACK; t++) {
-        float pk = 0.0f, g0 = tr_gain[t][0], g1 = tr_gain[t][1], d0, d1;
+        float pk, g0 = tr_gain[t][0], g1 = tr_gain[t][1], d0, d1;
         /* volume moves glide (~10 ms), ramped across the chunk: never a click */
         tr_gain[t][0] += (tr_gain_to[t][0] - tr_gain[t][0]) * 0.12f;
         tr_gain[t][1] += (tr_gain_to[t][1] - tr_gain[t][1]) * 0.12f;
@@ -1785,27 +1815,15 @@ void dsp_process(float *l, float *r, uint32_t n)
             dsp_meter[t] *= 0.98f;
             continue;
         }
-        for (k = 0; k < n; k++) {
-            float a, b;
-            a = tr_l[t][k] * g0;
-            b = tr_r[t][k] * g1;
-            g0 += d0;
-            g1 += d1;
-            l[k] += a;
-            r[k] += b;
-            rev_in_l[k] += a * tr_send[t][0];
-            rev_in_r[k] += b * tr_send[t][0];
-            dl_in_l[k] += a * tr_send[t][1];
-            dl_in_r[k] += b * tr_send[t][1];
-            pk = fm_maxf(pk, fm_fabsf(a) + fm_fabsf(b));
-        }
+        pk = PLAT_FAR(mix_track)(tr_l[t], tr_r[t], g0, g1, d0, d1, tr_send[t][0], tr_send[t][1], l, r, rev_in_l,
+                                 rev_in_r, dl_in_l, dl_in_r, n);
         dsp_meter[t] += (pk - dsp_meter[t]) * (pk > dsp_meter[t] ? 0.3f : 0.02f);
     }
-    beat_run(l, r, rev_in_l, rev_in_r, n);
-    delay_run(dl_in_l, dl_in_r, l, r, rev_in_l, rev_in_r, n);
-    reverb_run(rev_in_l, rev_in_r, l, r, n);
-    master_run(l, r, n);
+    PLAT_FAR(beat_run)(l, r, rev_in_l, rev_in_r, n);
+    PLAT_FAR(delay_run)(dl_in_l, dl_in_r, l, r, rev_in_l, rev_in_r, n);
+    PLAT_FAR(reverb_run)(rev_in_l, rev_in_r, l, r, n);
+    PLAT_FAR(master_run)(l, r, n);
     for (k = 0; k < n; k++)
-        out_peak = fm_maxf(out_peak, fm_fabsf(l[k]));
+        out_peak = fmi_maxf(out_peak, fmi_fabsf(l[k]));
     dsp_out_meter += (out_peak - dsp_out_meter) * (out_peak > dsp_out_meter ? 0.3f : 0.02f);
 }

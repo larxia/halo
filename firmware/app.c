@@ -430,7 +430,7 @@ static void vturn(uint32_t id, int32_t e)
         break;
     case SV_QUAL:
         set.qual = (uint8_t)clamp(set.qual + e, 0, 2);
-        dsp_quality = set.qual == 2u ? 1u : 2u;
+        dsp_quality = set.qual == 2u ? 0u : 2u;
         dirty = 1;
         break;
     case SV_MIDI:
@@ -547,7 +547,7 @@ static void load_all(void)
         if (song.t[i].len == 0u || song.t[i].len > NSTEP)
             song.magic = 0;
     comp_init();
-    dsp_quality = set.qual == 2u ? 1u : 2u;
+    dsp_quality = set.qual == 2u ? 0u : 2u;
     ui.track = set.track;
     dirty = 0;
 }
@@ -1065,10 +1065,20 @@ static void draw_head(void)
     } else {
         cv_rect(190, 11, 9, 9, GREY);
     }
-    int_text((int32_t)comp_bpm(), t);
-    cv_text(203, 10, &FONT_XS, t, comp_playing ? INK : GREY);
+    {   /* the audio load, always in sight: pink under 70 %, white to 90 %, red above (and while the engines are
+         * lightened: the quality letter beside it) */
+        uint32_t cpu = plat_cpu_pct();
+        char q[2] = {dsp_quality >= 2u ? 0 : dsp_quality == 1u ? 'L' : 'E', 0};
+        int_text((int32_t)cpu, t);
+        text_cat(t, "%");
+        cv_text(202, 4, &FONT_XS, t, cpu >= 90u ? RGB(255, 80, 80) : cpu >= 70u ? INK : PINK_MID);
+        if (q[0])
+            cv_text(230, 4, &FONT_XS, q, RGB(255, 80, 80));
+        int_text((int32_t)comp_bpm(), t);
+        cv_text(202, 17, &FONT_XS, t, comp_playing ? INK : GREY);
+    }
     if (ui.rec)
-        disc(232, 15, 4, RGB(255, 96, 140));
+        disc(232, 22, 4, RGB(255, 96, 140));
     /* where we are: one dot per page */
     for (i = 0; i < NPAGES; i++)
         cv_rect(120 - (int32_t)NPAGES * 5 + (int32_t)i * 10, 30, i == ui.page ? 8 : 4, 2, i == ui.page ? PINK : RULE);
@@ -1517,7 +1527,7 @@ static void draw_presets(void)
 
 static void draw_settings(void)
 {
-    char t[24];
+    char t[64];
     uint32_t cpu = plat_cpu_pct();
     cv_begin(240, 140, C_BLACK);
     draw_logo(40, 50, 26.0f, 4.5f, PINK, INK);
@@ -1534,6 +1544,7 @@ static void draw_settings(void)
     }
     text_cat(t, "%   ENGINES ");
     text_cat(t, dsp_quality >= 2u ? "FULL" : dsp_quality == 1u ? "LIGHT" : "LIGHTEST");
+
     cv_text(8, 100, &FONT_XS, t, GREY);
     {
         char n[12];
@@ -1649,10 +1660,27 @@ void app_frame(void)
     static uint32_t last_draw_main, cards_lit_until;
     input();
     speaker_check();
-    /* AUTO quality: back to full a while after an overload, if the load allows */
-    if (set.qual == 0u && dsp_quality < 2u && now - overload_at > 8000u && plat_cpu_pct() < 70u) {
-        dsp_quality++;
-        overload_at = now;
+    /* AUTO quality: a level back up only after 10 s with the load under 50 % (a step up is about +10 %: no
+     * bouncing between levels, each bounce a dropout) */
+    {
+        static uint32_t calm_since;
+        if (plat_cpu_pct() >= 50u || dsp_quality >= 2u)
+            calm_since = now;
+        if (set.qual == 0u && dsp_quality < 2u && now - overload_at > 10000u && now - calm_since > 10000u) {
+            dsp_quality++;
+            overload_at = now;
+            calm_since = now;
+        }
+    }
+    /* the header's load figure, twice a second */
+    {
+        static uint32_t load_at, load_seen = 0xFFFFu;
+        uint32_t c = plat_cpu_pct() | (uint32_t)dsp_quality << 8 | plat_xruns() << 10;
+        if (now - load_at > 500u && c != load_seen) {
+            load_at = now;
+            load_seen = c;
+            ui.redraw_head = 1;
+        }
     }
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0;
