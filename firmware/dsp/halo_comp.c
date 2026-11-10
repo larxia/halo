@@ -405,10 +405,23 @@ static const mood_t MOODS[NMOODS] = {
     /* NOSTALGIC: mixolydian, I-iii-IV-bVII, maj7 and min7 */
     {4, 40, (1u << CH_MAJ7) | (1u << CH_MIN7) | (1u << CH_ADD9) | (1u << CH_AUTO),
      "1134314" "3002320" "2100531" "5212102" "3211002" "2232200" "5101210", 0, 0, 4, 2},
+    /* WISTFUL: gentle, sparse major-key piano: plain triads and add9, I-IV-vi-V, long rests, little choir */
+    {0, 44, (1u << CH_AUTO) | (1u << CH_ADD9) | (1u << CH_SUS2) | (1u << CH_MAJ7),
+     "1115430" "2003310" "1100430" "6211211" "4101002" "2122401" "3020000", 0, 0, 1, 1},
+    /* LANTERN: pentatonic, rhythmic and bright: ostinatos over lush pads, sus and add9 colours */
+    {6, 52, (1u << CH_SUS2) | (1u << CH_ADD9) | (1u << CH_AUTO) | (1u << CH_OPEN5),
+     "1225400" "3002300" "2100400" "5220200" "4321000" "0000000" "0000000", 0, 0, 3, 2},
+    /* ANALOG: warm minor, a singing lead over soft chords: i-VI-III-VII and i-iv */
+    {1, 40, (1u << CH_AUTO) | (1u << CH_MIN7) | (1u << CH_ADD9) | (1u << CH_MAJ7),
+     "1114343" "2002120" "2110323" "5101212" "3110103" "4122103" "4121200", 0, 0, 1, 2},
 };
 /* what the UI sets when a mood is chosen */
-const uint8_t MOOD_SCALE[NMOODS] = {3, 0, 1, 5, 6, 2, 4};
-const uint8_t MOOD_TEMPO[NMOODS] = {38, 30, 34, 22, 32, 30, 40};
+const uint8_t MOOD_SCALE[NMOODS] = {3, 0, 1, 5, 6, 2, 4, 0, 6, 1};
+const uint8_t MOOD_TEMPO[NMOODS] = {38, 30, 34, 22, 32, 30, 40, 44, 52, 40};
+/* and the rhythm row's starting points: PULSE (ostinato), REST (silences), BEAT (the soft beat) */
+const uint8_t MOOD_PULSE[NMOODS] = {0, 0, 0, 0, 0, 10, 0, 0, 96, 0};
+const uint8_t MOOD_REST[NMOODS] = {10, 16, 20, 30, 20, 16, 16, 80, 10, 40};
+const uint8_t MOOD_BEAT[NMOODS] = {0, 0, 0, 0, 0, 0, 0, 0, 60, 24};
 
 /* ------------------------------------------------------------- INFINITY --- */
 static struct {
@@ -422,6 +435,10 @@ static struct {
     uint8_t aria_n;
     uint32_t aria_at[2];
     int32_t drone_note;
+    uint8_t ost[16], ost_len;          /* the ostinato: indexes into the chord, one an 8th or a 16th */
+    uint8_t phrase_on;                 /* the melody is in a phrase (1) or resting (0) */
+    uint32_t phrase_until, lh_at;      /* lh: the piano's left hand, its second note */
+    int32_t lh_note;
 } inf;
 
 static void inf_motif(void)
@@ -444,6 +461,17 @@ static void inf_motif(void)
         inf.motif[i] = (int8_t)d;
     }
     inf.motif_pos = 0;
+}
+
+/* an ostinato: a short figure over the chord's tones, rising and turning, repeated (it follows the chords) */
+static void inf_ostinato(void)
+{
+    static const uint8_t SHAPES[6][8] = {{0, 1, 2, 3, 2, 1, 0, 1}, {0, 2, 1, 3, 0, 2, 1, 3}, {0, 1, 2, 1, 3, 2, 1, 2},
+                                         {0, 2, 3, 2, 0, 2, 3, 4}, {3, 2, 1, 0, 1, 2, 3, 2}, {0, 1, 3, 1, 2, 1, 3, 4}};
+    uint32_t sh = crange(6u), i, len = u7(G_CPLX) > 0.6f && crndf() < 0.5f ? 16u : 8u;
+    for (i = 0; i < len; i++)
+        inf.ost[i] = (uint8_t)(SHAPES[(sh + i / 8u) % 6u][i % 8u] + (len == 16u && i >= 8u && crndf() < 0.3f ? 1u : 0u));
+    inf.ost_len = (uint8_t)len;
 }
 
 static void inf_rhythm(void)
@@ -585,6 +613,10 @@ static void inf_start(uint32_t now)
     voicing_n = 0;
     inf_motif();
     inf_rhythm();
+    inf_ostinato();
+    inf.phrase_on = 1;
+    inf.phrase_until = now + BAR * 4u;
+    inf.lh_at = 0;
     inf_next_chord(now, 1);
 }
 
@@ -621,10 +653,73 @@ static void inf_tick(uint32_t now)
             if (crndf() < 0.5f + rnd * 0.5f)
                 inf_motif();           /* a new theme for the new section, sometimes */
             inf_rhythm();
+            if (crndf() < 0.6f)
+                inf_ostinato();
         }
     }
-    if (now >= inf.next_chord)
+    /* REST: the melody speaks in phrases, with silences between, longer as REST rises */
+    if (now >= inf.phrase_until) {
+        float rest = u7(G_REST);
+        if (inf.phrase_on && crndf() < rest) {
+            inf.phrase_on = 0;
+            inf.phrase_until = now + BAR * (1u + crange(1u + (uint32_t)(rest * 4.0f)));
+        } else {
+            inf.phrase_on = 1;
+            inf.phrase_until = now + BAR * (2u + crange(3u));
+            inf.motif_pos = 0;
+        }
+    }
+    if (now >= inf.next_chord) {
         inf_next_chord(now, 0);
+        /* sparse moods: the pad sits some chords out, the piano's left hand carries them */
+        if (u7(G_REST) > 0.5f && crndf() < (u7(G_REST) - 0.5f) * 1.2f)
+            dsp_pad_chord(0, 0);
+    }
+    /* the piano's left hand: a low root and a chord tone, at each bar (WISTFUL and other resting moods) */
+    if (P[E_MODEL] == EM_PIANO && now % BAR == 0u && u7(G_REST) > 0.3f && voicing_n && comp_energy > 0.15f) {
+        int32_t root = voicing[0];
+        while (root > 52)
+            root -= 12;
+        while (root < 40)
+            root += 12;
+        note_for(TR_ECHO, root, 52u + crange(14u), BAR * 3u / 4u);
+        if (crndf() < 0.6f && voicing_n > 1) {   /* and a chord tone a beat or two later */
+            int32_t t = voicing[1 + (int32_t)crange((uint32_t)voicing_n - 1u)];
+            while (t > 64)
+                t -= 12;
+            while (t <= root)
+                t += 12;
+            inf.lh_note = t;
+            inf.lh_at = now + PPQ * (1u + crange(2u));
+        }
+    }
+    if (inf.lh_at && now >= inf.lh_at) {
+        inf.lh_at = 0;
+        note_for(TR_ECHO, inf.lh_note, 44u + crange(14u), PPQ * 2u);
+    }
+    /* PULSE: the ostinato on 8ths (16ths when the figure is long), over the chord's tones an octave up */
+    if (u7(G_PULSE) > 0.01f && voicing_n && comp_energy > 0.25f) {
+        uint32_t step = inf.ost_len == 16u ? T16 : T16 * 2u;
+        if (now % step == 0u) {
+            uint32_t i = (now / step) % inf.ost_len, idx = inf.ost[i];
+            int32_t note = voicing[idx % (uint32_t)voicing_n] + 12 * (int32_t)(idx / (uint32_t)voicing_n) + 12;
+            float p = u7(G_PULSE) * (0.55f + 0.45f * comp_energy);
+            while (note > 88)
+                note -= 12;
+            if (crndf() < p)
+                note_for(TR_ECHO, note, (i % 4u == 0u ? 84u : 62u) + crange(12u), step * 3u / 4u);
+        }
+    }
+    /* BEAT: a soft kick on the bar (and the half with density), ticks on a euclidean figure, a shaker off the beat */
+    if (u7(G_BEAT) > 0.01f && comp_energy > 0.35f && now % T16 == 0u) {
+        uint32_t s16 = (now / T16) % 16u;
+        if (s16 == 0u || (s16 == 8u && dens > 0.45f))
+            dsp_perc(PERC_KICK, 90u + crange(20u));
+        if (euclid(s16, 3u + (uint32_t)(dens * 4.0f), 16u, 2u) && crndf() < 0.85f)
+            dsp_perc(PERC_TICK, 50u + crange(40u));
+        if (s16 % 4u == 2u && crndf() < 0.5f + 0.4f * comp_energy)
+            dsp_perc(PERC_SHAKER, 60u + crange(30u));
+    }
     if (now >= inf.next_drift && P[G_DRIFT]) {
         if (crndf() < u7(G_DRIFT))
             drift_step(m->dark);
@@ -636,7 +731,7 @@ static void inf_tick(uint32_t now)
             note_for(TR_ARIA, inf.aria_notes[i], 70u + crange(30u), 0);
         }
     /* the melody: euclidean hits on the 16th grid, the motif's degrees over the chord's root */
-    if (now % T16 == 0u && comp_energy > 0.22f) {
+    if (now % T16 == 0u && comp_energy > 0.22f && inf.phrase_on) {
         uint32_t s16 = (now / T16) % 16u, len16;
         int strong = s16 % 4u == 0u;
         float p = (0.35f + 0.65f * dens) * inf.breath * (0.4f + 0.8f * comp_energy);

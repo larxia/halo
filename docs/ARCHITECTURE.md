@@ -72,7 +72,8 @@ protocol is not a proven recovery mechanism, because an interrupted write is not
 | DRONE | 1 (13 partials) | 8 harmonic partials (1–10×) with random-walk amplitudes, 5 detuned twins for slow beating, sub octave and fifths (only where audible), optional band-limited saw "grit", up to 4 synthesised grains on the harmonics, a wandering stereo filter, HOLD, glide between roots |
 | SHIMMER | 4 slots × 3 partials | 2, 2½ and 3 octaves above the harmony (±1 octave), each partial twinkling on its own random envelope, two cross-coupled allpass diffusers, sent hard into the reverb |
 | ARIA (choir) | 3 | two detuned band-limited saws plus breath noise per voice, one shared stereo formant bank (three band-passes) morphing through AH, EH, EE, OH and OO, delayed-onset vibrato, ensemble detune |
-| ECHO | 4 | two-operator FM (8 ratios, from soft plucks to glass and metal), decaying index, ADSR, velocity, tone filter, arpeggiator, scale lock |
+| ECHO | 6 (4 at lighter quality; 1 as LEAD) | three models. **FM:** two operators, 8 ratios, decaying index. **PIANO:** two detuned strings (FM at ratio 1 for hammer brightness), felt-hammer noise, key-tracked decay, brightness fading before level, low-to-high panning. **LEAD:** mono, saw-to-square oscillators plus a sharp saw, soft drive, two-stage resonant SVF (4-pole), filter envelope, glide, delayed vibrato, last-note priority with a 6-key stack. ADSR, velocity, tone filter, arpeggiator, scale lock |
+| BEAT | 3 sounds | a sine kick falling to 45 Hz, a bright noise tick, a swelling noise shaker; INFINITY's RHYTHM row drives it |
 
 All fixed-pitch sines (partials, sub, air, grains, the FM modulator) are "magic circle" oscillators: two multiplies
 and two adds a sample. They are renormalised once a chunk, so they never drift over hours.
@@ -84,6 +85,7 @@ and two adds a sample. They are renormalised once a chunk, so they never drift o
 | Reverb | 4-line FDN, Hadamard mix, 4 input diffusers, two modulated lines, damping per line, low cut, rectifier shimmer in the loop; types HALL, CATHEDRAL, INFINITE, DARK, SHIMMER; LFO-button FREEZE | 80 KB pool |
 | Delay | tape / ping-pong, tempo-synced, stored at 22.05 kHz in 16 bits (1.49 s a side), wow and flutter, saturation and filtering in the feedback | 128 KB pool |
 | Master | chorus, 4-stage phaser, tremolo, moving noise layer (air or rain), exciter, DC blocker, saturation, tanh limiter | 8 KB pool |
+| Tape warble | a 0.55 Hz wow and 4.7 Hz flutter added to every engine's pitch (WARBLE), a few cents | none |
 
 ### Composer (`firmware/dsp/halo_comp.c`)
 
@@ -102,6 +104,11 @@ and two adds a sample. They are renormalised once a chunk, so they never drift o
   repeats with mutations, leaning on chord tones on strong beats. Above 50% complexity a second polyrhythmic layer
   (5, 7 or 12 steps) is added. A slow "breath" varies note probability. RANDOM flattens the transition weights,
   mutates the motif and moves section boundaries; it never leaves the scale.
+* **RHYTHM (0.2):** PULSE plays an ostinato, a figure of 8 or 16 indexes into the current voicing (rising and
+  turning shapes), so it follows every chord change and voice-leading move. REST gates the melody into 2–4-bar
+  phrases with 1–5-bar silences; above 50% the pad sits out some chords. With the PIANO model a left hand plays a
+  low root each bar and a chord tone a beat or two later. BEAT puts a kick on the bar (and the half, with density),
+  ticks on a Euclidean figure and a shaker off the beat, once the arrangement's energy passes the intro.
 
 ### Memory budget (HALO's own; the platform's comes on top)
 
@@ -122,9 +129,10 @@ scaled against a figure measured on a real FM-1 (Felucca's ANALOG engine, 8 voic
 
 | Case | Estimated load |
 |---|---|
-| Typical INFINITY (pad chord, drone, 4 shimmer, 1 choir, 2 echo voices, preset effects) | ≈ 47% |
-| Worst case (every voice of every engine, every effect on), quality FULL | ≈ 59% |
-| Worst case, quality LIGHTEST | ≈ 53% |
+| Typical INFINITY, presets 01 / 21 / 22 / 23 / 24 (pad chord, drone, shimmer, choir, 3 echo voices, beat) | ≈ 49 / 47 / 51 / 51 / 47% |
+| Worst case: every voice of every engine (6 PIANO voices), every effect, the beat; quality FULL | ≈ 69% |
+| The same with FM / LEAD echo | ≈ 63 / 58% |
+| Worst case, quality LIGHT / LIGHTEST (AUTO steps down to these above 90%) | ≈ 57 / 55% |
 
 This is an **estimate, not a measurement**. HALO is float and the calibration engine is fixed-point. The FM-1 runs
 code from a flash cache, and the target compiler is different. The SETTINGS page shows the real audio load on a
@@ -145,3 +153,13 @@ analysed for its *techniques*, not its notes. Nothing of any existing recording,
 * **Space as an instrument:** high sends, long modulated tails and the SPACE macro moving size, decay and sends
   together. FREEZE holds the room.
 * **A bed underneath:** the drone holds the tonic, lifting to chord roots now and then, and fades over seconds.
+
+## Sound design: the Minecraft-era palette (0.2)
+
+Requested later: music in the manner of C418's Volume Alpha and Beta, naming *Moog City*, *Haunt Muskie* and *Aria
+Math*. Published descriptions: Moog City was made with a Moog Voyager synthesizer and sits in E minor; Haunt Muskie is
+described as an upbeat, ambient, rhythmic track; C418 hears an Asian influence in Aria Math and Haunt Muskie, and
+Volume Beta leans on lush ambient synths. HALO takes the *techniques* (a warm mono analog lead with glide and
+vibrato, rhythmic pentatonic figures over lush pads, a soft felt piano with space, a little tape wobble) and none of
+the melodies, chord sequences or recordings. The presets WARM CIRCUIT, PAPER LANTERNS, RIVER LIGHTS and SOFT KEYS,
+and the moods ANALOG, LANTERN and WISTFUL, are where these meet.

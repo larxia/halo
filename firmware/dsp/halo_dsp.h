@@ -12,7 +12,7 @@
 /* voice budget (fixed, predictable): see docs/ARCHITECTURE.md */
 #define ATMOS_VOICES 4
 #define ARIA_VOICES 3
-#define ECHO_VOICES 4
+#define ECHO_VOICES 6
 #define SHIM_SLOTS 4
 
 void dsp_init(void);
@@ -24,6 +24,9 @@ void dsp_release_all(uint32_t track);
 void dsp_pad_chord(const int32_t *notes, uint32_t n);
 void dsp_shim_chord(const int32_t *notes, uint32_t n);                         /* every held note of a track released */
 void dsp_kill(void);                                          /* silence now (panic) */
+enum { PERC_KICK, PERC_TICK, PERC_SHAKER };
+void dsp_perc(uint32_t type, uint32_t vel);                   /* the soft beat (INFINITY's RHYTHM) */
+extern volatile uint32_t dsp_beats;                           /* beats played (the tests count them) */
 void dsp_process(float *l, float *r, uint32_t n);             /* n <= HALO_CHUNK, adds nothing: writes */
 
 /* mix state (written by the UI with single stores; read once per chunk) */

@@ -61,4 +61,4 @@ extern volatile uint8_t comp_held_mask;             /* tracks with a key held (k
 extern volatile int8_t comp_chord_root_pc, comp_chord_type;   /* the chord sounding (-1 none); type: CH_*, or
                                                                  * 10 dom7, 11 m7b5, 12 m(maj7), 13 maj7#5, 14 other */
 float comp_bpm(void);
-extern const uint8_t MOOD_SCALE[NMOODS], MOOD_TEMPO[NMOODS];
+extern const uint8_t MOOD_SCALE[NMOODS], MOOD_TEMPO[NMOODS], MOOD_PULSE[NMOODS], MOOD_REST[NMOODS], MOOD_BEAT[NMOODS];

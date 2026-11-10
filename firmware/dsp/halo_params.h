@@ -49,6 +49,8 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(E_SUS,    "SUSTN",   0, F_PCT,  0) X(E_REL,    "RELEAS", 72, F_TIME, 0) \
     X(E_ARP,    "ARP",     0, F_ENUM, E_ARPS) X(E_ARATE, "RATE",   2, F_ENUM, E_DIVS) \
     X(E_AOCT,   "OCTS",    1, F_ENUM, E_AOCTS) X(E_VEL,  "VEL",    80, F_PCT, 0) \
+    X(E_MODEL,  "MODEL",   0, F_ENUM, E_MODELS) X(E_GLIDE, "GLIDE", 40, F_TIME, 0) \
+    X(E_VIB,    "VIBRAT", 24, F_PCT,  0) X(E_RES,    "RESO",   30, F_PCT,  0) \
     /* ---- FX ---- */ \
     X(R_TYPE,   "REVERB",  0, F_ENUM, E_RTYPE) X(R_SIZE, "SIZE",  84, F_PCT, 0) \
     X(R_DECAY,  "DECAY",  88, F_PCT,  0) X(R_DAMP,   "DAMP",   46, F_PCT,  0) \
@@ -57,7 +59,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(L_TIME,   "TIME",    5, F_ENUM, E_DTIME) X(L_FDBK, "FEEDBK", 70, F_PCT, 0) \
     X(L_TONE,   "TONE",   60, F_PCT,  0) X(L_WOW,    "WOW",    36, F_PCT,  0) \
     X(L_MODE,   "MODE",    0, F_ENUM, E_DMODE) X(L_LEVEL, "LEVEL",  86, F_PCT, 0) \
-    X(L_TOREV,  "TO REV", 50, F_PCT,  0) X(X_SPARE,  "-",       0, F_RAW,  0) \
+    X(L_TOREV,  "TO REV", 50, F_PCT,  0) X(X_WARBLE, "WARBLE",  0, F_PCT,  0) \
     X(C_DEPTH,  "CHORUS", 34, F_PCT,  0) X(C_RATE,   "C.RATE", 18, F_HZ,   0) \
     X(H_AMT,    "PHASER",  0, F_PCT,  0) X(H_RATE,   "P.RATE", 10, F_HZ,   0) \
     X(T_DEPTH,  "TREMOL",  0, F_PCT,  0) X(T_RATE,   "T.RATE", 40, F_HZ,   0) \
@@ -79,7 +81,9 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(G_CHORD,  "CHORD",   0, F_ENUM, E_CHORDS) X(G_DRIFT,"H.DRIFT",50, F_PCT, 0) \
     X(G_MOOD,   "MOOD",    0, F_ENUM, E_MOODS) X(G_CPLX, "COMPLX", 50, F_PCT, 0) \
     X(G_DENS,   "DENSTY", 50, F_PCT,  0) X(G_EVOL,   "EVOLVE", 50, F_PCT,  0) \
-    X(G_RAND,   "RANDOM", 36, F_PCT,  0) X(G_SWING,  "HUMAN",  20, F_PCT,  0)
+    X(G_RAND,   "RANDOM", 36, F_PCT,  0) X(G_SWING,  "HUMAN",  20, F_PCT,  0) \
+    X(G_PULSE,  "PULSE",   0, F_PCT,  0) X(G_REST,   "REST",   10, F_PCT,  0) \
+    X(G_BEAT,   "BEAT",    0, F_PCT,  0) X(G_BTONE,  "B.TONE", 50, F_PCT,  0)
 
 #define X_ENUM(id, label, def, fmt, tab) id,
 enum { HALO_PARAMS(X_ENUM) NPARAM };
@@ -91,13 +95,15 @@ enum { TR_ATMOS, TR_DRONE, TR_SHIM, TR_ARIA, TR_ECHO, NTRACK };
 
 /* enum tables (texts in halo_params.c) */
 enum { E_SHOCT = 1, E_VOWEL, E_VOCT, E_RATIOS, E_ARPS, E_DIVS, E_AOCTS, E_RTYPE, E_DTIME, E_DMODE, E_KEYS, E_SCALES,
-       E_MODES, E_CHORDS, E_MOODS, NENUMS };
+       E_MODES, E_CHORDS, E_MOODS, E_MODELS, NENUMS };
 enum { RT_HALL, RT_CATHEDRAL, RT_INFINITE, RT_DARK, RT_SHIMMER };
 enum { ARP_OFF, ARP_UP, ARP_DOWN, ARP_UPDOWN, ARP_RANDOM, ARP_CHORD };
 enum { DM_TAPE, DM_PINGPONG };
 enum { MODE_SEQ, MODE_INFINITY };
 enum { CH_AUTO, CH_MAJ7, CH_MIN7, CH_ADD9, CH_SUS2, CH_SUS4, CH_MIN9, CH_OPEN5, CH_QUARTAL, CH_NOTES, NCHORDS };
-enum { MOOD_DREAM, MOOD_CELESTIAL, MOOD_MELANCHOLY, MOOD_DARK, MOOD_SERENE, MOOD_MYSTERIOUS, MOOD_NOSTALGIC, NMOODS };
+enum { MOOD_DREAM, MOOD_CELESTIAL, MOOD_MELANCHOLY, MOOD_DARK, MOOD_SERENE, MOOD_MYSTERIOUS, MOOD_NOSTALGIC,
+       MOOD_WISTFUL, MOOD_LANTERN, MOOD_ANALOG, NMOODS };
+enum { EM_FM, EM_PIANO, EM_LEAD };      /* ECHO's models: FM bells and plucks, a felt piano, a mono analog lead */
 #define NSCALES 10
 
 typedef struct {
@@ -119,7 +125,7 @@ typedef struct {
     const pv_t *pv;
     uint8_t n;
 } preset_t;
-#define NPRESETS 20
+#define NPRESETS 24
 extern const preset_t PRESETS[NPRESETS];
 void params_defaults(void);
 void preset_apply(uint32_t i);

@@ -26,6 +26,7 @@ Each `expect` checks the app's state. `shot` saves the screen and `wav` records 
 |---|---|
 | `smoke.txt` (21 checks) | boot; the pages; a preset loads; INFINITY starts with a 4-voice chord and stops; a key plays a chord; DRONE HOLD toggles and holds; SEQUENCE steps toggle from the white keys; SAVE survives a reboot; USB backup and restore bring the saved state back |
 | `engines.txt` (5 checks) | each engine alone, a note or chord held then released: five WAVs for the audio checks |
+| `styles.txt` (14 checks) | presets 21–24 in INFINITY: the lead, the ostinato, the beat (it plays), the piano; the LEAD model by hand stays one voice with two keys held and after one is let go |
 | `compose.txt` (21 checks) | 150 s of INFINITY: pad, drone, shimmer and melody all play, chords stay 4-voice; SEQUENCE mode: chords from the pad's steps; REC writes played notes into the steps |
 
 ## Results (simulated)
@@ -41,15 +42,17 @@ Audio, from `analyse.py` (dBFS; LR is the left–right correlation; bands are en
 | ARIA alone, 2 voices | −19 | −6.3 | 0.000 | +0.47 | formant peaks in the 1–4 kHz band |
 | ECHO alone, 5 plucks | −24 | −10.0 | 0.000 | +0.13 | |
 | INFINITY, 6 presets × 98 s | −8 to −14 | −2.8 to −3.3 | ≤ 0.0015 | 0.0 to +0.3 | no clipping, no clicks, wide but mono-safe |
+| INFINITY, presets 21–24 × 102 s | −13 to −20 | −3.1 to −5.6 | ≤ 0.0002 | +0.16 to +0.55 | the lead, the ostinato, the beat and the piano's rests visible in the spectrograms |
 
 CPU, estimated (`cpu_estimate.sh`; calibration: Felucca's ANALOG engine with 8 voices, 17% measured on an FM-1):
 
 | Case | x86 instructions / sample | Estimated FM-1 load |
 |---|---|---|
 | Calibration (ANALOG, 8 voices) | 1048 | 17% (measured by Felucca) |
-| HALO typical (INFINITY, preset 01) | 2958 | ≈ 47% |
-| HALO worst case, FULL | 3657 | ≈ 59% |
-| HALO worst case, LIGHTEST | 3290 | ≈ 53% |
+| HALO typical, presets 01 / 21 / 22 / 23 / 24 | 3056 / 2957 / 3203 / 3145 / 2918 | ≈ 49 / 47 / 51 / 51 / 47% |
+| HALO worst case (6 PIANO voices, every effect, the beat), FULL | 4282 | ≈ 69% |
+| the same, ECHO as FM / LEAD | 3919 / 3624 | ≈ 63 / 58% |
+| the same, LIGHT / LIGHTEST | 3541 / 3401 | ≈ 57 / 55% |
 
 Optimisation history: 89% → 65% (oscillators as magic circles, a shared formant bank, chunk envelopes) → 51% → 59%
 (the worst case had been undercounted: a drone bug kept it silent in the benchmark; fixed and re-measured) → 59%.

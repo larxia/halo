@@ -18,7 +18,10 @@ int main(int argc, char **argv)
     dsp_shim_chord(ch, 4);
     dsp_note_on(TR_DRONE, 38, 100);
     for (i = 0; i < 3; i++) dsp_note_on(TR_ARIA, 64 + 4 * (int32_t)i, 100);
-    for (i = 0; i < 4; i++) dsp_note_on(TR_ECHO, 72 + 3 * (int32_t)i, 100);
+    if (argc > 3) P[E_MODEL] = (uint8_t)atoi(argv[3]);   /* 0 FM, 1 PIANO, 2 LEAD */
+    for (i = 0; i < ECHO_VOICES; i++) dsp_note_on(TR_ECHO, 72 + 3 * (int32_t)i, 100);
+    P[G_BEAT] = 100;
+    dsp_perc(PERC_KICK, 100);
     for (b = 0; b < nb; b++) {
         dsp_process(l, r, HALO_CHUNK);
         sink += l[5];

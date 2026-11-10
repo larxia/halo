@@ -21,6 +21,7 @@
 volatile uint8_t dsp_mute, dsp_solo, dsp_quality = 2, dsp_drone_gate;
 volatile float dsp_tempo_bpm = 72.0f;
 volatile float dsp_meter[NTRACK], dsp_out_meter, dsp_drone_hz;
+volatile uint32_t dsp_beats;
 
 /* ------------------------------------------------------------------ tools --- */
 #define SIN_N 1024u
@@ -53,7 +54,8 @@ static inline __attribute__((always_inline)) uint32_t rnd(void)
 static inline __attribute__((always_inline)) float rndf(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }   /* 0..1 */
 static inline __attribute__((always_inline)) float rnds(void) { return rndf() * 2.0f - 1.0f; }                        /* -1..1 */
 
-static inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.0f / 12.0f)); }
+static float warble_semi;               /* the tape's wobble, in semitones, for every engine (X_WARBLE) */
+static inline float note_hz(float note) { return 440.0f * fm_exp2f((note + warble_semi - 69.0f) * (1.0f / 12.0f)); }
 static inline float u7(uint32_t id) { return (float)P[id] * (1.0f / 127.0f); }                 /* 0..1 */
 static inline float b7(uint32_t id) { return ((float)P[id] - 64.0f) * (1.0f / 63.0f); }        /* -1..1 */
 /* a 0..127 value as a time: 3 ms .. ~20 s, exponential */
@@ -817,19 +819,31 @@ static void aria_run(float *l, float *r, uint32_t n)
 }
 
 /* ================================================================= ECHO === */
+/* Three models (E_MODEL):
+ *   FM     two-operator FM: plucks, bells, glass, metal (RATIO 0.5..7, INDEX, I.DECAY)
+ *   PIANO  a soft felt piano: two slightly detuned "strings" (FM at ratio 1 for the hammer's brightness), a felt
+ *          hammer thump, decay that shortens up the keyboard, brightness that fades faster than the level
+ *   LEAD   a monophonic analog lead: saw-to-square oscillators (RATIO picks the blend), a soft drive, a resonant
+ *          4-pole low-pass (two state-variable stages), a filter envelope (INDEX, I.DECAY), glide and delayed
+ *          vibrato; legato playing glides without a new attack, last note wins */
 static const float ECHO_RATIO[8] = {0.5f, 1.0f, 2.0f, 3.0f, 3.5f, 4.0f, 5.19f, 7.0f};
 typedef struct {
     int32_t note;
-    float pc, idx, vel, lp;
+    float pitch, pc, pc2, idx, vel, lp, hammer, bright, fenv, vib_ph, vib_amt;
     mc_t m;
     eg_t eg;
+    egc_t pe;                          /* PIANO: this voice's envelope (its decay set by its key) */
+    svf_t f1, f2;
     uint32_t age;
     float pan;
 } echo_voice_t;
 static struct {
     echo_voice_t v[ECHO_VOICES];
     egc_t eg;
-    float idec, tone_a;
+    float idec, tone_a, glide;
+    int32_t stack[6];                  /* LEAD: the keys held, newest last */
+    uint32_t nstack;
+    svfc_t lf1, lf2;
 } ec;
 
 static void echo_cook(void)
@@ -840,12 +854,57 @@ static void echo_cook(void)
     ec.eg.r = tc(v_time(u7(E_REL)) * 0.3f);
     ec.idec = tc(v_time(u7(E_IDEC)) * 0.25f);
     ec.tone_a = 1.0f - fm_expf(-TWO_PI * fm_minf(v_cut(u7(E_TONE)), 18000.0f) * INV_FS);
+    ec.glide = fm_minf(tc(v_time(u7(E_GLIDE)) * 0.12f) * (float)HALO_CHUNK, 1.0f);
+    if (P[E_MODEL] == EM_LEAD) {       /* the lead's filter: TONE, its envelope, the key; RESO on the second stage */
+        echo_voice_t *v = &ec.v[0];
+        float c = u7(E_TONE) + u7(E_INDEX) * v->fenv * 0.45f + ((float)v->note - 60.0f) * 0.0025f;
+        svf_set(&ec.lf1, v_cut(c), 0.1f);
+        svf_set(&ec.lf2, v_cut(c), u7(E_RES) * 0.88f);
+        v->fenv -= v->fenv * fm_minf(ec.idec * (float)HALO_CHUNK, 1.0f);
+    }
+}
+
+static void echo_lead_target(int32_t note)
+{
+    ec.v[0].note = note;
 }
 
 static void echo_on(int32_t note, uint32_t vel)
 {
     uint32_t i, best = 0, score_best = 0;
     float vs = u7(E_VEL), v01 = (float)vel * (1.0f / 127.0f);
+    if (P[E_MODEL] == EM_LEAD) {
+        echo_voice_t *v = &ec.v[0];
+        for (i = 0; i < ec.nstack; i++)          /* the stack: this note to the top */
+            if (ec.stack[i] == note) {
+                for (; i + 1u < ec.nstack; i++)
+                    ec.stack[i] = ec.stack[i + 1u];
+                ec.nstack--;
+                break;
+            }
+        if (ec.nstack >= 6u) {
+            for (i = 0; i + 1u < 6u; i++)
+                ec.stack[i] = ec.stack[i + 1u];
+            ec.nstack = 5u;
+        }
+        ec.stack[ec.nstack++] = note;
+        v->vel = 1.0f - vs + vs * v01;
+        if (v->eg.st != EG_IDLE && v->eg.st != EG_REL) {   /* legato: glide, no new attack */
+            echo_lead_target(note);
+            return;
+        }
+        if (v->eg.st == EG_IDLE) {
+            v->pitch = (float)note;
+            v->f1.ic1 = v->f1.ic2 = v->f2.ic1 = v->f2.ic2 = 0.0f;
+        }
+        echo_lead_target(note);
+        v->fenv = 1.0f;
+        v->vib_amt = 0.0f;
+        v->eg.st = EG_ATK;               /* from wherever the level is: no click */
+        for (i = 1; i < ECHO_VOICES; i++)
+            ec.v[i].eg.st = EG_IDLE;
+        return;
+    }
     for (i = 0; i < ECHO_VOICES; i++) {
         uint32_t score = ec.v[i].eg.st == EG_IDLE ? 0xFFFFFFFFu : 0x80000000u * (ec.v[i].eg.st == EG_REL) + ec.v[i].age;
         if (score >= score_best) {
@@ -853,34 +912,111 @@ static void echo_on(int32_t note, uint32_t vel)
             best = i;
         }
     }
+    if (dsp_quality < 2u && best >= 4u)  /* lighter: four voices */
+        best = ec.v[0].age > ec.v[1].age ? 0u : 1u;
     for (i = 0; i < ECHO_VOICES; i++)
         ec.v[i].age++;
     {
         echo_voice_t *v = &ec.v[best];
         v->note = note;
+        v->pitch = (float)note;
         v->vel = 1.0f - vs + vs * v01;
-        v->idx = u7(E_INDEX) * (1.0f - vs * 0.5f + vs * 0.5f * v01) * 2.2f;
         v->age = 0;
         v->pc = 0.0f;
+        v->pc2 = 0.37f;
         mc_start(&v->m, 0.0f);
         v->pan = rnds() * 0.5f;
         v->eg.v = 0.0f;
         v->eg.st = EG_ATK;
+        if (P[E_MODEL] == EM_PIANO) {
+            /* the hammer: harder with velocity (INDEX); the decay shorter up the keyboard */
+            float key = fm_exp2f(((float)note - 60.0f) * (1.0f / 18.0f));
+            v->idx = (0.25f + 0.75f * v01) * (0.3f + u7(E_INDEX) * 1.6f);
+            v->hammer = 0.25f + 0.5f * v01;
+            v->bright = 1.0f;
+            v->pe.a = tc(0.0025f);
+            v->pe.d = fm_minf(tc(v_time(u7(E_DEC)) * 0.9f + 0.4f) * key, 0.5f);
+            v->pe.s = 0.0f;
+            v->pe.r = ec.eg.r;
+            v->pan = fm_clampf(((float)note - 64.0f) * 0.025f, -0.6f, 0.6f);   /* low left, high right */
+        } else {
+            v->idx = u7(E_INDEX) * (1.0f - vs * 0.5f + vs * 0.5f * v01) * 2.2f;
+        }
     }
 }
 
 static void echo_off(int32_t note)
 {
     uint32_t i;
+    if (P[E_MODEL] == EM_LEAD) {
+        for (i = 0; i < ec.nstack; i++)
+            if (ec.stack[i] == note) {
+                for (; i + 1u < ec.nstack; i++)
+                    ec.stack[i] = ec.stack[i + 1u];
+                ec.nstack--;
+                break;
+            }
+        if (ec.v[0].note == note) {
+            if (ec.nstack)
+                echo_lead_target(ec.stack[ec.nstack - 1u]);   /* back to the key still held */
+            else if (ec.v[0].eg.st != EG_IDLE)
+                ec.v[0].eg.st = EG_REL;
+        }
+        return;
+    }
     for (i = 0; i < ECHO_VOICES; i++)
         if (ec.v[i].note == note && ec.v[i].eg.st != EG_IDLE && ec.v[i].eg.st != EG_REL)
             ec.v[i].eg.st = EG_REL;
 }
 
+static inline __attribute__((always_inline)) float saw_b(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph, dt); }
+
+static void echo_lead_run(float *l, float *r, uint32_t n)
+{
+    echo_voice_t *v = &ec.v[0];
+    uint32_t k;
+    float hz, i1, i2, sq = (float)(P[E_RATIO] & 7u) / 7.0f, g, vib;
+    if (v->eg.st == EG_IDLE)
+        return;
+    v->pitch += ((float)v->note - v->pitch) * ec.glide;
+    /* vibrato: it arrives after the note has sung a moment */
+    v->vib_amt += (1.0f - v->vib_amt) * 0.012f;
+    v->vib_ph = wrap1(v->vib_ph + 5.2f * (float)n * INV_FS);
+    vib = sin_t(v->vib_ph) * u7(E_VIB) * 0.35f * v->vib_amt * v->vib_amt;
+    hz = note_hz(v->pitch + vib);
+    i1 = hz * INV_FS;
+    i2 = hz * 1.0035f * INV_FS;
+    g = 0.30f * v->vel;
+    for (k = 0; k < n; k++) {
+        float e = eg_run(&v->eg, &ec.eg), p2, s, y;
+        v->pc += i1;
+        if (v->pc >= 1.0f)
+            v->pc -= 1.0f;
+        v->pc2 += i2;
+        if (v->pc2 >= 1.0f)
+            v->pc2 -= 1.0f;
+        p2 = v->pc + 0.5f;
+        if (p2 >= 1.0f)
+            p2 -= 1.0f;
+        /* oscillator 1 blends saw to square (a saw minus a half-turned saw); oscillator 2 is a saw, a touch sharp */
+        s = saw_b(v->pc, i1) - sq * saw_b(p2, i1) + 0.6f * saw_b(v->pc2, i2);
+        s = s * 0.6f;
+        s = s / (1.0f + fm_fabsf(s) * 0.5f);   /* drive into the filter: the warmth */
+        y = svf_lp(&v->f2, &ec.lf2, svf_lp(&v->f1, &ec.lf1, s));
+        y *= e * g;
+        l[k] += y;
+        r[k] += y;
+    }
+}
+
 static void echo_run(float *l, float *r, uint32_t n)
 {
-    uint32_t i, k;
+    uint32_t i, k, model = P[E_MODEL];
     float ratio = ECHO_RATIO[P[E_RATIO] & 7u], a = ec.tone_a;
+    if (model == EM_LEAD) {
+        echo_lead_run(l, r, n);
+        return;
+    }
     for (i = 0; i < ECHO_VOICES; i++) {
         echo_voice_t *v = &ec.v[i];
         float hz, ic, em, gl, gr, g;
@@ -888,9 +1024,40 @@ static void echo_run(float *l, float *r, uint32_t n)
             continue;
         hz = note_hz((float)v->note);
         ic = hz * INV_FS;
+        pan_gains(v->pan, &gl, &gr);
+        if (model == EM_PIANO) {
+            float ic2 = ic * 1.0011f, ab, br0 = v->bright, br1, dbr;
+            em = mc_e(hz);
+            mc_norm(&v->m, em);
+            g = 0.62f * v->vel;
+            v->bright *= 1.0f - fm_minf(ec.idec * 0.5f * (float)n, 0.9f);   /* the tone dulls faster than it fades */
+            br1 = v->bright;
+            dbr = (br1 - br0) / (float)n;
+            for (k = 0; k < n; k++) {
+                float e = eg_run(&v->eg, &v->pe), br = br0 + dbr * (float)k, mod, s, hmr;
+                v->pc += ic;
+                if (v->pc >= 1.0f)
+                    v->pc -= 1.0f;
+                v->pc2 += ic2;
+                if (v->pc2 >= 1.0f)
+                    v->pc2 -= 1.0f;
+                mod = mc_run(&v->m, em) * v->idx * br;
+                s = (sin_t(v->pc + mod * 0.22f) + sin_t(v->pc2 + mod * 0.18f)) * 0.5f;
+                hmr = 0.0f;
+                if (v->hammer > 0.001f) {   /* the felt's thump: a few milliseconds of soft noise */
+                    v->hammer *= 0.9955f;
+                    hmr = rnds() * v->hammer * 0.35f;
+                }
+                s = s * e * (0.55f + 0.45f * br) + hmr * (0.5f + 0.5f * e);
+                ab = a * (0.18f + 0.82f * br);
+                v->lp += (s - v->lp) * ab;
+                l[k] += v->lp * g * gl;
+                r[k] += v->lp * g * gr;
+            }
+            continue;
+        }
         em = mc_e(hz * ratio);
         mc_norm(&v->m, em);
-        pan_gains(v->pan, &gl, &gr);
         g = 0.40f * v->vel;
         for (k = 0; k < n; k++) {
             float e = eg_run(&v->eg, &ec.eg), s;
@@ -903,6 +1070,72 @@ static void echo_run(float *l, float *r, uint32_t n)
             l[k] += v->lp * gl;
             r[k] += v->lp * gr;
         }
+    }
+}
+
+/* ================================================================= BEAT === */
+/* The soft beat INFINITY can add (G_BEAT): a round kick, a tick, a shaker. Tiny on purpose: it marks time under the
+ * music rather than driving it. B.TONE darker or brighter, shorter or longer. */
+static struct {
+    float k_ph, k_hz, k_env, t_env, s_env, s_att, t_lp, s_hp, s_lp, t_hp;
+} bt;
+
+void dsp_perc(uint32_t type, uint32_t vel)
+{
+    float v = (float)vel * (1.0f / 127.0f);
+    dsp_beats++;
+    switch (type) {
+    case PERC_KICK:
+        bt.k_hz = 110.0f + 40.0f * u7(G_BTONE);
+        bt.k_env = 0.9f * v;
+        break;
+    case PERC_TICK:
+        bt.t_env = 0.30f * v;
+        break;
+    default:
+        bt.s_att = 0.22f * v;
+        break;
+    }
+}
+
+static void beat_run(float *l, float *r, float *rl, float *rr, uint32_t n)
+{
+    uint32_t k;
+    float lvl = u7(G_BEAT), tone = u7(G_BTONE);
+    float kdec = 1.0f - INV_FS / (0.10f + 0.25f * (1.0f - tone)), tdec = 1.0f - INV_FS / (0.012f + 0.02f * tone);
+    float sdec = 1.0f - INV_FS / (0.03f + 0.06f * tone), tcoef = 0.25f + 0.6f * tone;
+    if (lvl < 0.01f || (bt.k_env < 1e-4f && bt.t_env < 1e-4f && bt.s_env < 1e-4f && bt.s_att < 1e-4f))
+        return;
+    lvl *= lvl * 1.2f;
+    for (k = 0; k < n; k++) {
+        float kick = 0.0f, tick = 0.0f, shk = 0.0f, nz;
+        if (bt.k_env > 1e-4f) {        /* the kick: a sine falling to ~45 Hz */
+            bt.k_hz += (45.0f - bt.k_hz) * 0.0012f;
+            bt.k_ph = wrap1(bt.k_ph + bt.k_hz * INV_FS);
+            kick = sin_t(bt.k_ph) * bt.k_env;
+            bt.k_env *= kdec;
+        }
+        nz = rnds();
+        if (bt.t_env > 1e-4f) {        /* the tick: bright noise, a few milliseconds */
+            bt.t_hp += (nz - bt.t_hp) * 0.5f;
+            bt.t_lp += ((nz - bt.t_hp) - bt.t_lp) * tcoef;
+            tick = bt.t_lp * bt.t_env;
+            bt.t_env *= tdec;
+        }
+        if (bt.s_att > 1e-4f || bt.s_env > 1e-4f) {   /* the shaker: a softer swell of noise */
+            bt.s_env += bt.s_att * 0.02f;
+            bt.s_att *= 0.98f;
+            bt.s_hp += (nz - bt.s_hp) * 0.3f;
+            shk = (nz - bt.s_hp) * bt.s_env;
+            bt.s_env *= sdec;
+        }
+        kick *= lvl;
+        tick *= lvl;
+        shk *= lvl;
+        l[k] += kick + tick * 0.6f + shk * 0.9f;
+        r[k] += kick + tick * 0.9f + shk * 0.6f;
+        rl[k] += (tick + shk) * 0.3f;
+        rr[k] += (tick + shk) * 0.3f;
     }
 }
 
@@ -1352,6 +1585,7 @@ void dsp_release_all(uint32_t track)
                 ar.v[i].eg.st = EG_REL;
         break;
     case TR_ECHO:
+        ec.nstack = 0;
         for (i = 0; i < ECHO_VOICES; i++)
             if (ec.v[i].eg.st != EG_IDLE)
                 ec.v[i].eg.st = EG_REL;
@@ -1458,9 +1692,15 @@ void dsp_kill(void)
     dr.level = 0.0f;
 }
 
+static float warble_ph, flutter_ph;
+
 static void cook_all(void)
 {
     uint32_t t;
+    /* the tape's wobble: a slow wow and a little flutter, a few cents at most */
+    warble_ph = wrap1(warble_ph + 0.55f * (float)HALO_CHUNK * INV_FS);
+    flutter_ph = wrap1(flutter_ph + 4.7f * (float)HALO_CHUNK * INV_FS);
+    warble_semi = u7(X_WARBLE) * (0.16f * sin_t(warble_ph) + 0.035f * sin_t(flutter_ph));
     mac_space = b7(M_SPACE);
     mac_motion = b7(M_MOTION);
     mac_shim = b7(M_SHIM);
@@ -1503,7 +1743,9 @@ void dsp_process(float *l, float *r, uint32_t n)
             tr_hold[t] = 4000u;          /* chunks: ~3 s */
         else if (tr_hold[t])
             tr_hold[t]--;
-        tr_live[t] = tr_hold[t] != 0u;
+        /* a track turned all the way down (and faded out) costs nothing */
+        tr_live[t] = tr_hold[t] != 0u && (tr_gain_to[t][0] + tr_gain_to[t][1] > 1e-5f
+                                          || tr_gain[t][0] + tr_gain[t][1] > 1e-4f);
         if (tr_live[t])
             for (k = 0; k < n; k++)
                 tr_l[t][k] = tr_r[t][k] = 0.0f;
@@ -1547,6 +1789,7 @@ void dsp_process(float *l, float *r, uint32_t n)
         }
         dsp_meter[t] += (pk - dsp_meter[t]) * (pk > dsp_meter[t] ? 0.3f : 0.02f);
     }
+    beat_run(l, r, rev_in_l, rev_in_r, n);
     delay_run(dl_in_l, dl_in_r, l, r, rev_in_l, rev_in_r, n);
     reverb_run(rev_in_l, rev_in_r, l, r, n);
     master_run(l, r, n);

@@ -70,8 +70,17 @@ follows the pad's chords automatically; its own keys and steps add notes.
 **ARIA:** VOWEL (AH EH EE OH OO), V.DRIFT (how far the vowel swings), V.RATE, BREATH · VIBRATO, V.SPEED, ENSEMBLE,
 FORMANT (lower: darker, a male choir) · ATTACK, RELEASE, OCTAVE, BRIGHT.
 
-**ECHO:** RATIO (0.5 to 7: soft plucks, glass, metal), INDEX, I.DECAY, TONE · ADSR · ARP (UP, DOWN, UP DN,
-RANDOM, CHORD: arpeggiates the pad's chord), RATE, OCTS, VEL (velocity response).
+**ECHO:** three models (row MODEL: MODEL, GLIDE, VIBRATO, RESO), and the knobs of the tone row are named for the
+model chosen:
+
+| Model | What it is | Tone row |
+|---|---|---|
+| FM | plucks, bells, glass, metal | RATIO (0.5 to 7), INDEX, I.DECAY, TONE |
+| PIANO | a soft felt piano: two slightly detuned strings, a felt thump, shorter notes up the keyboard, brightness that fades before the level | HAMMER (how hard), MELLOW (how soon it dulls), TONE; SUSTAIN on the envelope row is how long notes ring |
+| LEAD | a monophonic analog lead: saw to square, a soft drive into a resonant 4-pole filter, glide, vibrato that arrives after the note | WAVE (saw to square), ENV>F, F.DECAY, CUTOFF; RESO and GLIDE on the model row. Legato keys glide without a new attack; the last key wins |
+
+Then the envelope · ARP (UP, DOWN, UP DN, RANDOM, CHORD: arpeggiates the pad's chord), RATE, OCTS, VEL (velocity
+response).
 
 **SEQUENCE:** the white keys are steps 1–16 (OCT+ for 17–32). Tap a key to switch a step on or off; hold it and
 turn K1–K4 to set its NOTE, CHANCE, LENGTH. Black keys 1–5 choose the track; black keys 6–9 choose the pattern
@@ -79,16 +88,25 @@ turn K1–K4 to set its NOTE, CHANCE, LENGTH. Black keys 1–5 choose the track;
 neighbouring scale tones) · PATTERN (the pattern edited, AUTO: a parameter automated across the pattern, POINT: its
 value at the cursor, TEMPO). On the pad track a step plays a chord on its note.
 
-**INFINITY:** MOOD (DREAM, CELESTIAL, MELANCHOLY, DARK, SERENE, MYSTERIOUS, NOSTALGIC; each brings a scale and tempo,
-both still editable), KEY, SCALE, TEMPO · COMPLEXITY (richer chords, wider leaps, a polyrhythmic second melody),
+**INFINITY:** MOOD (DREAM, CELESTIAL, MELANCHOLY, DARK, SERENE, MYSTERIOUS, NOSTALGIC, WISTFUL, LANTERN, ANALOG;
+each brings a scale, a tempo and a rhythm row, all still editable), KEY, SCALE, TEMPO · COMPLEXITY (richer chords, wider leaps, a polyrhythmic second melody),
 DENSITY, EVOLVE (how often the chords and sections change), RANDOM · MODE (SEQUENCE or INFINITY: what PLAY runs),
-CHORD (a fixed colour, or AUTO for the mood's), H.DRIFT (harmonic drift), HUMAN (velocity and timing life).
+CHORD (a fixed colour, or AUTO for the mood's), H.DRIFT (harmonic drift), HUMAN (velocity and timing life) ·
+RHYTHM: PULSE (a repeating figure over the chord's tones on 8ths or 16ths, played by ECHO), REST (the melody speaks
+in phrases with silences between; high REST also lets the pad sit some chords out and, with the PIANO model, brings
+in a left hand), BEAT (a soft kick, tick and shaker under the music), B.TONE (the beat darker and longer, or brighter
+and shorter).
+
+The three newest moods: **WISTFUL** (gentle, sparse, major: plain chords and long silences, made for the piano),
+**LANTERN** (pentatonic and rhythmic: ostinatos and a quiet beat over lush pads) and **ANALOG** (warm minor: a
+singing lead over soft chords).
 
 **FX:** reverb (TYPE: HALL, CATHEDRAL, INFINITE, DARK, SHIMMER; SIZE, DECAY, DAMP, MOD, SHIMMER, LEVEL, LOCUT) ·
 delay (TIME in beats, FEEDBACK, TONE, WOW, MODE: TAPE or PINGPONG, LEVEL, TO REV) · CHORUS, PHASER, TREMOLO ·
-SATURATION, EXCITER, NOISE (with N.TONE and N.MOVE), OUTPUT.
+SATURATION, EXCITER, NOISE (with N.TONE and N.MOVE), OUTPUT · WARBLE (delay row 2): a slow tape wobble on the pitch
+of every engine, a few cents.
 
-**PRESETS:** 20 factory presets (docs/PRESETS.md). PRESET or K1 browse; SEL loads.
+**PRESETS:** 24 factory presets (docs/PRESETS.md). PRESET or K1 browse; SEL loads.
 
 **SETTINGS:** SCALE LOCK, VELOCITY, OCTAVE, MIDI IN (channels 1–5 to tracks 1–5, or OMNI to the selected track) ·
 QUALITY (AUTO lightens the engines under load; HIGH; ECO), CLEAR SONG and INIT SOUND (turn twice). The audio load

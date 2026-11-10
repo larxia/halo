@@ -17,7 +17,7 @@ tap GLO
 turn ALGO 2
 turn K1 -1
 wait 50
-expect p120 0
+expect mode 0
 tap SEQ
 expect page 6
 tapkey 1

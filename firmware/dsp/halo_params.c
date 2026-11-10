@@ -24,11 +24,13 @@ static const char *const T_KEYS[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", 
 static const char *const T_MODES[] = {"SEQUENCE", "INFINITY"};
 static const char *const T_CHORDS[] = {"AUTO", "MAJ7", "MIN7", "ADD9", "SUS2", "SUS4", "MIN9", "OPEN 5TH", "QUARTAL",
                                        "NOTES"};
-static const char *const T_MOODS[] = {"DREAM", "CELESTIAL", "MELANCHOLY", "DARK", "SERENE", "MYSTERIOUS", "NOSTALGIC"};
+static const char *const T_MOODS[] = {"DREAM", "CELESTIAL", "MELANCHOLY", "DARK", "SERENE", "MYSTERIOUS", "NOSTALGIC",
+                                      "WISTFUL", "LANTERN", "ANALOG"};
+static const char *const T_MODELS[] = {"FM", "PIANO", "LEAD"};
 
 const char *const *const ENUM_TEXT[NENUMS] = {0, T_SHOCT, T_VOWEL, T_VOCT, T_RATIOS, T_ARPS, T_DIVS, T_AOCTS, T_RTYPE,
-                                              T_DTIME, T_DMODE, T_KEYS, SCALE_NAME, T_MODES, T_CHORDS, T_MOODS};
-const uint8_t ENUM_COUNT[NENUMS] = {0, 2, 5, 2, 8, 6, 6, 3, 5, 8, 2, 12, NSCALES, 2, NCHORDS, NMOODS};
+                                              T_DTIME, T_DMODE, T_KEYS, SCALE_NAME, T_MODES, T_CHORDS, T_MOODS, T_MODELS};
+const uint8_t ENUM_COUNT[NENUMS] = {0, 2, 5, 2, 8, 6, 6, 3, 5, 8, 2, 12, NSCALES, 2, NCHORDS, NMOODS, 3};
 
 uint32_t param_max(uint32_t id)
 {
@@ -176,10 +178,10 @@ const preset_t PRESETS[NPRESETS] = {
     {"CELESTIAL DRIFT", "SUS2 HARMONY THAT RE-VOICES ITSELF SLOWLY",
      PV({G_MOOD, MOOD_CELESTIAL}, {G_KEY, 0}, {G_SCALE, 0}, {G_TEMPO, 28}, {G_CHORD, CH_SUS2}, {G_DRIFT, 110},
         {R_TYPE, RT_SHIMMER}, {S_INT, 76}, {S_SPARK, 70}, {A_MORPH, 70}, {A_DRIFT, 60}, {M_MOTION, 80})},
-    {"HOLLOW MOON", "TRIANGLE PADS, A FIFTH IN THE DRONE, A SLOW PHASER",
+    {"HOLLOW MOON", "TRIANGLE PADS, A FIFTH, A SLOW PHASER",
      PV({G_MOOD, MOOD_MYSTERIOUS}, {G_KEY, 11}, {G_SCALE, 2}, {G_TEMPO, 26}, {A_SHAPE, 64}, {A_AIR, 10},
         {D_FIFTH, 80}, {D_DENS, 40}, {T2_VOL, 96}, {H_AMT, 70}, {H_RATE, 8}, {R_TYPE, RT_DARK}, {S_INT, 40})},
-    {"DREAM SEQUENCE", "AN UP-DOWN ARPEGGIO THROUGH PING-PONG ECHOES",
+    {"DREAM SEQUENCE", "AN ARPEGGIO THROUGH PING-PONG ECHOES",
      PV({G_MOOD, MOOD_DREAM}, {G_KEY, 2}, {G_SCALE, 3}, {G_TEMPO, 62}, {E_ARP, ARP_CHORD}, {E_ARATE, 4},
         {E_AOCT, 1}, {E_DEC, 54}, {E_INDEX, 50}, {L_MODE, DM_PINGPONG}, {L_TIME, 3}, {T5_DLY, 96}, {G_DENS, 30},
         {T5_VOL, 74})},
@@ -197,14 +199,14 @@ const preset_t PRESETS[NPRESETS] = {
     {"LUNAR CHOIR", "A HUSHED ENSEMBLE: OO DRIFTING TOWARD AH",
      PV({G_MOOD, MOOD_SERENE}, {G_KEY, 7}, {G_SCALE, 6}, {G_TEMPO, 28}, {V_VOWEL, 4}, {V_DRIFT, 90},
         {V_DRATE, 14}, {V_ENS, 100}, {T4_VOL, 110}, {T1_VOL, 64}, {R_TYPE, RT_CATHEDRAL}, {V_FORM, 64})},
-    {"ENDLESS RAIN", "PLUCKED MINOR FIGURES THROUGH TAPE, A RAIN LAYER",
+    {"ENDLESS RAIN", "MINOR PLUCKS THROUGH TAPE, A RAIN LAYER",
      PV({G_MOOD, MOOD_MELANCHOLY}, {G_KEY, 2}, {G_SCALE, 7}, {G_TEMPO, 52}, {X_NOISE, 48}, {X_NTONE, 108},
         {X_NMOVE, 50}, {E_RATIO, 1}, {E_DEC, 50}, {E_INDEX, 20}, {G_DENS, 86}, {L_MODE, DM_TAPE}, {L_WOW, 70},
         {T5_DLY, 90})},
     {"HARMONIC DUST", "GRAINS AND SPARKS ABOVE A SLOW CHORD",
      PV({G_MOOD, MOOD_MYSTERIOUS}, {G_KEY, 9}, {G_SCALE, 2}, {G_TEMPO, 34}, {D_GRAIN, 110}, {D_MOTION, 80},
         {S_SPARK, 110}, {S_INT, 84}, {G_DENS, 28}, {G_CPLX, 80}, {E_RATIO, 6}, {E_INDEX, 24})},
-    {"GHOST SIGNAL", "METALLIC RESONANCE, TREMOLO, A DISTANT TRANSMISSION",
+    {"GHOST SIGNAL", "METAL RESONANCE, TREMOLO, A FAR SIGNAL",
      PV({G_MOOD, MOOD_DARK}, {G_KEY, 6}, {G_SCALE, 8}, {G_TEMPO, 40}, {E_RATIO, 6}, {E_INDEX, 80}, {A_RES, 96},
         {A_CUT, 50}, {A_LFOD, 70}, {T_DEPTH, 60}, {T_RATE, 70}, {H_AMT, 50}, {X_NOISE, 20}, {R_TYPE, RT_DARK},
         {V_VOWEL, 4}, {T4_VOL, 70})},
@@ -214,7 +216,7 @@ const preset_t PRESETS[NPRESETS] = {
     {"MIDNIGHT ARIA", "A SOLO VOICE ON AH OVER A DARK MINOR HALL",
      PV({G_MOOD, MOOD_MELANCHOLY}, {G_KEY, 11}, {G_SCALE, 1}, {G_TEMPO, 26}, {V_VOWEL, 0}, {V_DRIFT, 20},
         {V_VIB, 54}, {V_ENS, 24}, {T4_VOL, 116}, {R_TYPE, RT_DARK}, {R_DECAY, 104}, {A_CUT, 52}, {G_DENS, 20})},
-    {"SILENT GEOMETRY", "QUARTAL HARMONY, EUCLIDEAN AND POLYRHYTHMIC LINES",
+    {"SILENT GEOMETRY", "QUARTAL HARMONY, EUCLIDEAN POLYRHYTHMS",
      PV({G_MOOD, MOOD_MYSTERIOUS}, {G_KEY, 0}, {G_SCALE, 2}, {G_TEMPO, 58}, {G_CHORD, CH_QUARTAL},
         {G_CPLX, 112}, {G_DENS, 92}, {G_RAND, 20}, {E_DEC, 40}, {E_RATIO, 3}, {L_TIME, 2}, {A_SHAPE, 20},
         {S_INT, 40})},
@@ -222,9 +224,34 @@ const preset_t PRESETS[NPRESETS] = {
      PV({G_MOOD, MOOD_DARK}, {G_KEY, 3}, {G_SCALE, 8}, {G_TEMPO, 30}, {D_GRIT, 50}, {D_WOBBLE, 70},
         {X_NOISE, 40}, {X_NTONE, 20}, {E_RATIO, 7}, {E_INDEX, 70}, {X_SAT, 60}, {R_TYPE, RT_DARK},
         {T_DEPTH, 30}, {T_RATE, 20}, {M_DEPTH, 90})},
-    {"AFTERGLOW", "WARM MAJ7 CHORDS, TAPE ECHOES, THE LAST LIGHT",
+    {"AFTERGLOW", "WARM MAJ7 CHORDS, TAPE ECHOES, LAST LIGHT",
      PV({G_MOOD, MOOD_NOSTALGIC}, {G_KEY, 10}, {G_SCALE, 0}, {G_TEMPO, 44}, {G_CHORD, CH_MAJ7}, {A_SHAPE, 96},
         {A_CUT, 64}, {C_DEPTH, 50}, {L_WOW, 54}, {X_SAT, 28}, {E_RATIO, 1}, {S_INT, 50})},
+    /* 21-24: the Minecraft-era palette (techniques only, no borrowed melodies): a warm analog lead, rhythmic
+     * pentatonic ostinatos, a felt piano with long silences */
+    {"WARM CIRCUIT", "AN ANALOG LEAD GLIDING OVER MINOR CHORDS",
+     PV({G_MOOD, MOOD_ANALOG}, {G_KEY, 4}, {G_SCALE, 1}, {G_TEMPO, 36}, {G_PULSE, 0}, {G_REST, 40}, {G_BEAT, 0},
+        {G_DENS, 54}, {G_CPLX, 30}, {E_MODEL, EM_LEAD}, {E_RATIO, 2}, {E_TONE, 58}, {E_INDEX, 52}, {E_IDEC, 74},
+        {E_RES, 34}, {E_GLIDE, 52}, {E_VIB, 44}, {E_ATK, 34}, {E_DEC, 96}, {E_SUS, 92}, {E_REL, 74}, {T5_VOL, 90},
+        {T5_DLY, 40}, {L_TIME, 4}, {L_FDBK, 50}, {A_SHAPE, 92}, {A_CUT, 64}, {T1_VOL, 72}, {T2_VOL, 50},
+        {S_INT, 24}, {T4_VOL, 36}, {R_SIZE, 70}, {R_DECAY, 80}, {X_WARBLE, 50}, {X_SAT, 32}, {C_DEPTH, 30})},
+    {"PAPER LANTERNS", "TURNING PENTATONIC BELLS, PADS, A CHOIR",
+     PV({G_MOOD, MOOD_LANTERN}, {G_KEY, 1}, {G_SCALE, 6}, {G_TEMPO, 50}, {G_PULSE, 100}, {G_BEAT, 30},
+        {G_REST, 10}, {G_DENS, 50}, {G_CPLX, 56}, {E_MODEL, EM_FM}, {E_RATIO, 2}, {E_INDEX, 54}, {E_DEC, 60},
+        {E_SUS, 0}, {E_REL, 50}, {T5_VOL, 104}, {T5_DLY, 50}, {L_TIME, 2}, {L_MODE, DM_PINGPONG}, {A_DETUNE, 50},
+        {A_AIR, 50}, {A_CUT, 70}, {T1_VOL, 78}, {V_VOWEL, 0}, {T4_VOL, 70}, {S_INT, 70}, {R_DECAY, 96}, {T2_VOL, 38},
+        {D_SUB, 30})},
+    {"RIVER LIGHTS", "SOFT PLUCKS, A QUIET BEAT, WARM PADS",
+     PV({G_MOOD, MOOD_LANTERN}, {G_KEY, 3}, {G_SCALE, 7}, {G_TEMPO, 60}, {G_PULSE, 84}, {G_BEAT, 80},
+        {G_BTONE, 40}, {G_REST, 16}, {G_DENS, 70}, {G_CPLX, 70}, {E_MODEL, EM_FM}, {E_RATIO, 1}, {E_INDEX, 30},
+        {E_DEC, 44}, {E_SUS, 0}, {T5_DLY, 44}, {L_TIME, 1}, {L_MODE, DM_PINGPONG}, {A_SHAPE, 100}, {A_CUT, 70},
+        {A_LFOD, 50}, {T2_VOL, 42}, {D_SUB, 24}, {S_INT, 50}, {X_WARBLE, 20})},
+    {"SOFT KEYS", "FELT PIANO, PLAIN CHORDS, LONG SILENCES",
+     PV({G_MOOD, MOOD_WISTFUL}, {G_KEY, 7}, {G_SCALE, 0}, {G_TEMPO, 44}, {G_REST, 80}, {G_PULSE, 0}, {G_BEAT, 0},
+        {G_DENS, 36}, {G_CPLX, 24}, {G_CHORD, CH_AUTO}, {E_MODEL, EM_PIANO}, {E_INDEX, 40}, {E_IDEC, 62},
+        {E_DEC, 96}, {E_REL, 60}, {E_TONE, 84}, {T5_VOL, 96}, {T5_DLY, 16}, {T5_REV, 70}, {T1_VOL, 56},
+        {A_CUT, 60}, {A_AIR, 20}, {T2_VOL, 0}, {S_INT, 30}, {T4_VOL, 50}, {R_SIZE, 76}, {R_DECAY, 84},
+        {X_WARBLE, 34}, {X_NOISE, 18}, {X_NTONE, 30}, {X_SAT, 20}, {X_MASTER, 116})},
 };
 
 void preset_apply(uint32_t i)

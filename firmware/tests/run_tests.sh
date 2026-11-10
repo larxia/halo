@@ -10,7 +10,7 @@ OUT=build/host
 FAIL=0
 python3 ../base/tools/build.py . --host > build-host.log 2>&1 || { tail -30 build-host.log; echo "FAIL build"; exit 1; }
 rm -f build-host.log
-for t in smoke engines compose; do
+for t in smoke engines compose styles; do
     if ./$OUT/halo_host tests/$t.txt $OUT > $OUT/$t.log 2>&1 && ! grep -q FAIL $OUT/$t.log; then
         echo "  ok   $t ($(grep -c '^ *ok' $OUT/$t.log) checks)"
     else

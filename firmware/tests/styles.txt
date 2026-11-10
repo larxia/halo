@@ -1,0 +1,67 @@
+# The Minecraft-era palette: presets 21-24 in INFINITY. The lead stays one voice; the pulse and beat play; the piano
+# rests between phrases.
+master 3000
+wait 600
+turn PRESET 20
+wait 200
+expect preset 20
+expect model 2
+wav s21_warm_circuit.wav
+tap PLAY
+wait 60000
+expect playing 1
+expect played4 1
+tap PLAY
+wait 6000
+wavstop
+turn PRESET 1
+wait 200
+expect preset 21
+wav s22_paper_lanterns.wav
+tap PLAY
+wait 60000
+expect played4 1
+tap PLAY
+wait 6000
+wavstop
+turn PRESET 1
+wait 200
+expect preset 22
+wav s23_river_lights.wav
+tap PLAY
+wait 60000
+expect beats 1
+tap PLAY
+wait 6000
+wavstop
+turn PRESET 1
+wait 200
+expect preset 23
+wav s24_soft_keys.wav
+tap PLAY
+wait 90000
+expect played4 1
+tap PLAY
+wait 6000
+wavstop
+# the lead by hand: two keys held then one let go: still one voice, gliding back
+tap EDIT
+tap EDIT
+tap EDIT
+tap EDIT
+tap EDIT
+expect page 5
+turn ALGO -9
+turn K1 2
+wait 50
+expect model 2
+key 7 down
+wait 300
+key 11 down
+wait 300
+expect active4 1
+key 11 up
+wait 300
+expect active4 1
+key 7 up
+wait 3000

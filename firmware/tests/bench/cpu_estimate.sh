@@ -21,12 +21,18 @@ for b in bench_halo bench_typ; do
         dsp/halo_dsp.c dsp/halo_params.c dsp/halo_comp.c -lm
 done
 ir() { valgrind --tool=callgrind --callgrind-out-file=/dev/null "$@" 2>&1 | sed -n 's/.*Collected : //p'; }
-per() { a=$(ir "$1" 200 ${2:-}); b=$(ir "$1" 2200 ${2:-}); echo $(( (b - a) / 64000 )); }
+per() { a=$(ir "$1" 200 ${2:-}); b=$(ir "$1" 2200 ${2:-}); echo $(( (b - a) / 64000 )); }   # $2 unquoted: args
 ref=$(per "$OUT/bench_analog")
 echo "calibration: Felucca ANALOG, 8 voices: $ref instructions a sample = 17 % on an FM-1 (measured there)"
 for q in 2 1 0; do
-    n=$(per "$OUT/bench_halo" $q)
-    echo "HALO worst case, quality $q: $n instructions a sample, estimated $(( n * 17 / ref )) %"
+    n=$(per "$OUT/bench_halo" "$q 1")
+    echo "HALO worst case (6 piano voices), quality $q: $n instructions a sample, estimated $(( n * 17 / ref )) %"
 done
-n=$(per "$OUT/bench_typ")
-echo "HALO typical (INFINITY, preset 01): $n instructions a sample, estimated $(( n * 17 / ref )) %"
+for m in 0 2; do
+    n=$(per "$OUT/bench_halo" "2 $m")
+    echo "HALO worst case, ECHO model $m (0 FM, 2 LEAD): $n instructions a sample, estimated $(( n * 17 / ref )) %"
+done
+for pr in 0 20 21 22 23; do
+    n=$(per "$OUT/bench_typ" $pr)
+    echo "HALO typical, preset $(( pr + 1 )): $n instructions a sample, estimated $(( n * 17 / ref )) %"
+done

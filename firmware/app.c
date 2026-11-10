@@ -16,7 +16,7 @@
 #include "dsp/halo_dsp.h"
 #include "dsp/halo_comp.h"
 
-#define HALO_VERSION "0.1.0"
+#define HALO_VERSION "0.2.0"
 
 /* ---------------------------------------------------------------- colours --- */
 #define PINK RGB(247, 170, 200)
@@ -84,16 +84,18 @@ static const page_rows_t ROWS[NPAGES] = {
     {3, {"HARMONICS", "SHAPE", "MIX"}, {{S_INT, S_BRIGHT, S_SPARK, S_DIFF}, {S_ATK, S_REL, S_OCT, S_FDBK}, MIX(2)}},
     {4, {"VOWEL", "VOICE", "ENVELOPE", "MIX"},
      {{V_VOWEL, V_DRIFT, V_DRATE, V_BREATH}, {V_VIB, V_VRATE, V_ENS, V_FORM}, {V_ATK, V_REL, V_OCT, V_BRIGHT}, MIX(3)}},
-    {4, {"TONE", "ENVELOPE", "ARPEGGIATOR", "MIX"},
-     {{E_RATIO, E_INDEX, E_IDEC, E_TONE}, {E_ATK, E_DEC, E_SUS, E_REL}, {E_ARP, E_ARATE, E_AOCT, E_VEL}, MIX(4)}},
+    {5, {"MODEL", "TONE", "ENVELOPE", "ARPEGGIATOR", "MIX"},
+     {{E_MODEL, E_GLIDE, E_VIB, E_RES}, {E_RATIO, E_INDEX, E_IDEC, E_TONE}, {E_ATK, E_DEC, E_SUS, E_REL},
+      {E_ARP, E_ARATE, E_AOCT, E_VEL}, MIX(4)}},
     {4, {"STEP", "TRACK", "PATTERN", "MIX"},
      {{V_STEP_NOTE, V_STEP_PROB, V_STEP_LEN, V_STEP_ON}, {V_TRK_LEN, V_TRK_DIV, V_TRK_CHAIN, V_TRK_GEN},
       {V_PAT, V_AUTO_ID, V_AUTO_VAL, G_TEMPO}, {V_NONE, V_NONE, V_NONE, V_NONE}}},
-    {3, {"MOOD", "BEHAVIOUR", "HARMONY"},
-     {{G_MOOD, G_KEY, G_SCALE, G_TEMPO}, {G_CPLX, G_DENS, G_EVOL, G_RAND}, {G_MODE, G_CHORD, G_DRIFT, G_SWING}}},
+    {4, {"MOOD", "BEHAVIOUR", "HARMONY", "RHYTHM"},
+     {{G_MOOD, G_KEY, G_SCALE, G_TEMPO}, {G_CPLX, G_DENS, G_EVOL, G_RAND}, {G_MODE, G_CHORD, G_DRIFT, G_SWING},
+      {G_PULSE, G_REST, G_BEAT, G_BTONE}}},
     {7, {"REVERB", "REVERB", "DELAY", "DELAY", "MODULATION", "MOTION AND HEAT", "TEXTURE"},
      {{R_TYPE, R_SIZE, R_DECAY, R_DAMP}, {R_MOD, R_SHIM, R_LEVEL, R_LOCUT}, {L_TIME, L_FDBK, L_TONE, L_WOW},
-      {L_MODE, L_LEVEL, L_TOREV, V_NONE}, {C_DEPTH, C_RATE, H_AMT, H_RATE}, {T_DEPTH, T_RATE, X_SAT, X_EXCITE},
+      {L_MODE, L_LEVEL, L_TOREV, X_WARBLE}, {C_DEPTH, C_RATE, H_AMT, H_RATE}, {T_DEPTH, T_RATE, X_SAT, X_EXCITE},
       {X_NOISE, X_NTONE, X_NMOVE, X_MASTER}}},
     {1, {"FACTORY"}, {{V_PRESET, V_NONE, V_NONE, V_NONE}}},
     {2, {"PLAYING", "SYSTEM"}, {{SV_LOCK, SV_VEL, SV_OCT, SV_MIDI}, {SV_QUAL, SV_CLEAR, SV_INIT, V_NONE}}},
@@ -625,10 +627,15 @@ static void knob(uint32_t k, int32_t e)
         if (v != (int32_t)P[id]) {
             P[id] = (uint8_t)v;
             dirty = 1;
-            if (id == G_MOOD) {          /* a mood brings its scale and tempo; both stay editable */
+            if (id == G_MOOD) {          /* a mood brings its scale, tempo and rhythm; all stay editable */
                 P[G_SCALE] = MOOD_SCALE[v];
                 P[G_TEMPO] = MOOD_TEMPO[v];
+                P[G_PULSE] = MOOD_PULSE[v];
+                P[G_REST] = MOOD_REST[v];
+                P[G_BEAT] = MOOD_BEAT[v];
             }
+            if (id == E_MODEL)           /* a new model: the old one's notes let go */
+                comp_post(EV_RELEASE_TRACK, TR_ECHO, 0, 0);
             if (id == D_HOLD)
                 comp_post(EV_DRONE_HOLD, TR_DRONE, 0, 0);
         }
@@ -1063,6 +1070,24 @@ static void draw_head(void)
     cv_blit(0, 0);
 }
 
+/* the ECHO tone row names what each knob does in the model chosen */
+static const char *card_label(uint32_t id)
+{
+    if (P[E_MODEL] == EM_LEAD) {
+        if (id == E_RATIO) return "WAVE";
+        if (id == E_INDEX) return "ENV>F";
+        if (id == E_IDEC) return "F.DECAY";
+        if (id == E_TONE) return "CUTOFF";
+    } else if (P[E_MODEL] == EM_PIANO) {
+        if (id == E_RATIO) return "-";
+        if (id == E_INDEX) return "HAMMER";
+        if (id == E_IDEC) return "MELLOW";
+        if (id == E_DEC) return "SUSTAIN";
+        if (id == E_SUS) return "-";
+    }
+    return id < NPARAM ? PARAM_INFO[id].label : vlabel(id);
+}
+
 static void draw_cards(void)
 {
     const page_rows_t *pr = &ROWS[ui.page];
@@ -1078,7 +1103,7 @@ static void draw_cards(void)
         if (id == V_NONE)
             continue;
         cv_text(x + 2, 5, &FONT_XS, kn, lit ? PINK : DIMG);
-        cv_text(x + 16, 5, &FONT_XS, id < NPARAM ? PARAM_INFO[id].label : vlabel(id), lit ? INK : GREY);
+        cv_text(x + 16, 5, &FONT_XS, card_label(id), lit ? INK : GREY);
         if (id < NPARAM)
             param_text(id, P[id], v);
         else
@@ -1223,7 +1248,8 @@ static void draw_engine(void)
     {
         static const char *const ROLE[NTRACK] = {"ATMOSPHERIC PADS", "EVOLVING DRONE", "CELESTIAL HARMONICS",
                                                  "WORDLESS CHOIR", "BELLS, PLUCKS, ARPEGGIOS"};
-        cv_text(8, 14, &FONT_B, ROLE[tr], INK);
+        static const char *const ECHO_ROLE[3] = {"BELLS, PLUCKS, ARPEGGIOS", "A SOFT FELT PIANO", "A SINGING ANALOG LEAD"};
+        cv_text(8, 14, &FONT_B, tr == TR_ECHO ? ECHO_ROLE[P[E_MODEL] % 3u] : ROLE[tr], INK);
     }
     switch (ui.page) {
     case PG_SYNTH:
@@ -1302,9 +1328,11 @@ static void draw_engine(void)
         cv_line(xs, ys, xr, y0, PINK);
         cv_text(160, 44, &FONT_XS, "ARPEGGIO (ARP)", DIMG);
         cv_text(160, 56, &FONT_B, ENUM_TEXT[E_ARPS][P[E_ARP] % 6u], P[E_ARP] ? PINK : GREY);
-        cv_text(160, 80, &FONT_XS, "RATIO", DIMG);
-        param_text(E_RATIO, P[E_RATIO], t);
-        cv_text(160, 92, &FONT_B, t, PINK);
+        cv_text(160, 80, &FONT_XS, "MODEL", DIMG);
+        {
+            static const char *const MN[3] = {"FM", "PIANO", "LEAD"};
+            cv_text(160, 92, &FONT_B, MN[P[E_MODEL] % 3u], PINK);
+        }
         break;
     }
     default:
@@ -1701,6 +1729,12 @@ int app_expect(const char *what, int *got)
         *got = (int)comp_bar;
     else if (!strcmp(what, "drone_note"))   /* the drone's root now, as a MIDI note */
         *got = (int)(12.0f * fm_log2f(fm_maxf(dsp_drone_hz, 8.0f) / 440.0f) + 69.5f);
+    else if (!strcmp(what, "model"))
+        *got = P[E_MODEL];
+    else if (!strcmp(what, "mode"))
+        *got = P[G_MODE];
+    else if (!strcmp(what, "beats"))        /* the soft beat has played (0 / 1) */
+        *got = dsp_beats != 0;
     else if (!strcmp(what, "energy"))
         *got = (int)(comp_energy * 100.0f);
     else if (!strncmp(what, "active", 6))   /* activeN: voices sounding on track N */
