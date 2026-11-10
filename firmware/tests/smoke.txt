@@ -4,6 +4,7 @@ wait 800
 shot boot.png
 expect page 0
 expect preset 0
+jack in
 wav infinity_pale_horizon.wav
 tap PLAY
 wait 200

@@ -33,7 +33,8 @@ void dsp_process(float *l, float *r, uint32_t n);             /* n <= HALO_CHUNK
 extern volatile uint8_t dsp_mute, dsp_solo;                   /* bit t = track t */
 extern volatile uint8_t dsp_quality;                          /* 2 full, 1 lighter, 0 lightest (overload) */
 extern volatile uint8_t dsp_drone_gate;                       /* the drone sounds (HOLD or a key / the composer) */
-extern volatile float dsp_tempo_bpm;                          /* for the synced delay */
+extern volatile float dsp_tempo_bpm;
+extern volatile uint8_t dsp_speaker;                          /* the built-in speaker: a low cut at ~110 Hz */                          /* for the synced delay */
 /* what the screen shows: each track's level (0..1, slow), the drone's root now, the shimmer's activity */
 extern volatile float dsp_meter[NTRACK], dsp_out_meter;
 extern volatile float dsp_drone_hz;

@@ -20,6 +20,7 @@
 
 volatile uint8_t dsp_mute, dsp_solo, dsp_quality = 2, dsp_drone_gate;
 volatile float dsp_tempo_bpm = 72.0f;
+volatile uint8_t dsp_speaker;
 volatile float dsp_meter[NTRACK], dsp_out_meter, dsp_drone_hz;
 volatile uint32_t dsp_beats;
 
@@ -1370,6 +1371,7 @@ static struct {
     float ap[2][4], ph_ph, ph_fb[2], ph_amt, ph_rate;
     float tr_ph, tr_depth, tr_rate;
     float sat, excite, ex_hp[2], noise, ntone, nmove, n_lp[2], n_ph, master, out_g, dc_x[2], dc_y[2];
+    float spk[2][2], spk_mix;          /* the speaker's low cut: two one-pole stages a side, faded in and out */
 } ms;
 
 static void master_cook(void)
@@ -1466,6 +1468,16 @@ static void master_run(float *l, float *r, uint32_t n)
                 ms.ex_hp[c] += (x[c] - ms.ex_hp[c]) * 0.35f;
                 h = x[c] - ms.ex_hp[c];
                 x[c] += (fm_fabsf(h) - 0.01f) * ms.excite * 0.6f + h * ms.excite * 0.4f;
+            }
+        ms.spk_mix += ((dsp_speaker ? 1.0f : 0.0f) - ms.spk_mix) * 0.0005f;
+        if (ms.spk_mix > 0.001f)         /* the built-in speaker: 12 dB an octave under ~110 Hz */
+            for (c = 0; c < 2u; c++) {
+                float h;
+                ms.spk[c][0] += (x[c] - ms.spk[c][0]) * 0.0155f;
+                h = x[c] - ms.spk[c][0];
+                ms.spk[c][1] += (h - ms.spk[c][1]) * 0.0155f;
+                h -= ms.spk[c][1];
+                x[c] += (h - x[c]) * ms.spk_mix;
             }
         for (c = 0; c < 2u; c++) {
             float y = x[c] - ms.dc_x[c] + 0.9993f * ms.dc_y[c];   /* DC blocker (~5 Hz): the rectifiers' offset */

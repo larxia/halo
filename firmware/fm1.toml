@@ -5,6 +5,7 @@ usb_manufacturer = "HALO"
 usb_product = "HALO FM-1"
 o2 = ["dsp/*.c"]               # the engines, effects and composer at -O2
 words = "words.tsv"
+headphones = true              # the jack's switch: the speaker gets a low cut (app.c speaker_check)
 ble = false
 backup = true                  # sound, song and settings backed up and restored over USB (all or nothing)
 backup_ext = "halo"                    # v0.1: USB and TRS MIDI only (the pool goes to the reverb and the delay)

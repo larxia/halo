@@ -577,9 +577,14 @@ void app_backup_restored(void)
 }
 
 /* ----------------------------------------------------------------- audio --- */
+/* The FM-1's DAC and amplifier run clean only well under digital full scale: the render's nominal full scale is
+ * 1 << 22 (-6 dBFS of the 24-bit word; fm1-base plat.h, as Felucca's OUT_SHIFT), and HALO's bus peaks below 0.92
+ * after its limiter, so the output's ceiling is about -7 dBFS and its music sits near -19 dBFS. (0.1 and 0.2 used
+ * 8e6, twice this: clean in the simulator, distorted on an FM-1.) */
+#define HALO_FULL_SCALE 4194304.0f
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    halo_render(lr, n, (float)master_q12 * (1.0f / 4096.0f) * 8000000.0f);
+    halo_render(lr, n, (float)master_q12 * (1.0f / 4096.0f) * HALO_FULL_SCALE);
 }
 
 void app_panic(void)
@@ -1588,6 +1593,13 @@ void app_ui_init(void)
     ui.redraw_head = ui.redraw_main = ui.redraw_cards = 1;
 }
 
+/* the built-in speaker (nothing in the headphone jack): a low cut, so the drone and the kick do not overdrive it */
+static void speaker_check(void)
+{
+    int hp = plat_headphones();
+    dsp_speaker = hp == 0;             /* -1 (not read yet): as headphones, the full range */
+}
+
 static void lights(void)
 {
     static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -1636,6 +1648,7 @@ void app_frame(void)
     uint32_t now = plat_ms(), i;
     static uint32_t last_draw_main, cards_lit_until;
     input();
+    speaker_check();
     /* AUTO quality: back to full a while after an overload, if the load allows */
     if (set.qual == 0u && dsp_quality < 2u && now - overload_at > 8000u && plat_cpu_pct() < 70u) {
         dsp_quality++;
