@@ -16,7 +16,7 @@
 #include "dsp/halo_dsp.h"
 #include "dsp/halo_comp.h"
 
-#define HALO_VERSION "0.3.1"
+#define HALO_VERSION "0.3.2"
 
 /* ---------------------------------------------------------------- colours --- */
 #define PINK RGB(247, 170, 200)
@@ -1862,6 +1862,26 @@ void app_frame(void)
             dsp_quality++;
             overload_at = now;
             calm_since = now;
+        }
+    }
+    /* a dropout (the render missed its deadline: heard as grit, crackle, harshness): said on the screen at once,
+     * and the engines lightened to the lightest straight away (AUTO) */
+    {
+        static uint32_t xr_seen, xr_said;
+        uint32_t xr = plat_xruns();
+        if (xr != xr_seen) {
+            xr_seen = xr;
+            if (set.qual == 0u && dsp_quality) {
+                dsp_quality = 0;
+                overload_at = now;
+            }
+            if (now - xr_said > 3000u) {
+                char t[16];
+                xr_said = now;
+                int_text((int32_t)plat_cpu_pct(), t);
+                text_cat(t, "% LOAD");
+                app_say("AUDIO DROPOUT", t);
+            }
         }
     }
     /* the header's load figure, twice a second */

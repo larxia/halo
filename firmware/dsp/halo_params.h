@@ -15,7 +15,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     /* ---- ATMOS: the pad (track 1) ---- */ \
     X(A_SHAPE,  "SHAPE",  44, F_PCT,  0) X(A_DETUNE, "DETUNE", 34, F_PCT,  0) \
     X(A_AIR,    "AIR",    30, F_PCT,  0) X(A_SUB,    "SUB",     8, F_PCT,  0) \
-    X(A_CUT,    "CUTOFF", 82, F_CUT,  0) X(A_RES,    "RESO",   18, F_PCT,  0) \
+    X(A_CUT,    "CUTOFF", 72, F_CUT,  0) X(A_RES,    "RESO",   10, F_PCT,  0) \
     X(A_ENV,    "ENV>F",  74, F_BIP,  0) X(A_DRIFT,  "DRIFT",  40, F_PCT,  0) \
     X(A_ATK,    "ATTACK", 82, F_TIME, 0) X(A_DEC,    "DECAY",  80, F_TIME, 0) \
     X(A_SUS,    "SUSTN", 104, F_PCT,  0) X(A_REL,    "RELEAS", 92, F_TIME, 0) \
@@ -24,14 +24,14 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     /* ---- DRONE (track 2) ---- */ \
     X(D_ROOT,   "ROOT",   36, F_NOTE, 0) X(D_DENS,   "DENSTY", 64, F_PCT,  0) \
     X(D_SUB,    "SUB",    56, F_PCT,  0) X(D_FIFTH,  "FIFTH",  30, F_PCT,  0) \
-    X(D_MOTION, "MOTION", 44, F_PCT,  0) X(D_TONE,   "TONE",   56, F_PCT,  0) \
-    X(D_BEAT,   "BEAT",   36, F_PCT,  0) X(D_GLIDE,  "GLIDE",  70, F_TIME, 0) \
-    X(D_GRAIN,  "GRAIN",   0, F_PCT,  0) X(D_GRIT,   "GRIT",    6, F_PCT,  0) \
-    X(D_CUT,    "CUTOFF", 84, F_CUT,  0) X(D_WOBBLE, "WOBBLE", 40, F_PCT,  0) \
+    X(D_MOTION, "MOTION", 36, F_PCT,  0) X(D_TONE,   "TONE",   40, F_PCT,  0) \
+    X(D_BEAT,   "BEAT",   18, F_PCT,  0) X(D_GLIDE,  "GLIDE",  70, F_TIME, 0) \
+    X(D_GRAIN,  "GRAIN",   0, F_PCT,  0) X(D_GRIT,   "GRIT",    0, F_PCT,  0) \
+    X(D_CUT,    "CUTOFF", 66, F_CUT,  0) X(D_WOBBLE, "WOBBLE", 26, F_PCT,  0) \
     X(D_HOLD,   "HOLD",    1, F_BOOL, 0) X(D_ATK,    "F.IN",   96, F_TIME, 0) \
     X(D_REL,    "F.OUT", 100, F_TIME, 0) X(D_FOLLOW, "FOLLOW",  1, F_BOOL, 0) \
     /* ---- SHIMMER (track 3) ---- */ \
-    X(S_INT,    "INTENS", 64, F_PCT,  0) X(S_BRIGHT, "BRIGHT", 58, F_PCT,  0) \
+    X(S_INT,    "INTENS", 48, F_PCT,  0) X(S_BRIGHT, "BRIGHT", 40, F_PCT,  0) \
     X(S_SPARK,  "SPARKL", 24, F_PCT,  0) X(S_DIFF,   "DIFFUS", 70, F_PCT,  0) \
     X(S_ATK,    "ATTACK", 90, F_TIME, 0) X(S_REL,    "RELEAS",100, F_TIME, 0) \
     X(S_OCT,    "OCTAVE",  0, F_ENUM, E_SHOCT) X(S_FDBK, "FEEDBK", 34, F_PCT, 0) \
@@ -43,7 +43,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(V_ATK,    "ATTACK", 84, F_TIME, 0) X(V_REL,    "RELEAS", 92, F_TIME, 0) \
     X(V_OCT,    "OCTAVE",  1, F_ENUM, E_VOCT) X(V_BRIGHT,"BRIGHT", 54, F_PCT, 0) \
     /* ---- ECHO: plucks, bells, arpeggios (track 5) ---- */ \
-    X(E_RATIO,  "RATIO",   2, F_ENUM, E_RATIOS) X(E_INDEX, "INDEX",  40, F_PCT, 0) \
+    X(E_RATIO,  "RATIO",   2, F_ENUM, E_RATIOS) X(E_INDEX, "INDEX",  28, F_PCT, 0) \
     X(E_IDEC,   "I.DECAY",56, F_TIME, 0) X(E_TONE,   "TONE",   78, F_CUT,  0) \
     X(E_ATK,    "ATTACK",  4, F_TIME, 0) X(E_DEC,    "DECAY",  76, F_TIME, 0) \
     X(E_SUS,    "SUSTN",   0, F_PCT,  0) X(E_REL,    "RELEAS", 72, F_TIME, 0) \
@@ -63,7 +63,7 @@ enum { F_PCT, F_BIP, F_NOTE, F_TIME, F_HZ, F_CUT, F_ENUM, F_TEMPO, F_RAW, F_BOOL
     X(C_DEPTH,  "CHORUS", 34, F_PCT,  0) X(C_RATE,   "C.RATE", 18, F_HZ,   0) \
     X(H_AMT,    "PHASER",  0, F_PCT,  0) X(H_RATE,   "P.RATE", 10, F_HZ,   0) \
     X(T_DEPTH,  "TREMOL",  0, F_PCT,  0) X(T_RATE,   "T.RATE", 40, F_HZ,   0) \
-    X(X_SAT,    "SATUR",   8, F_PCT,  0) X(X_EXCITE, "EXCITE",  0, F_PCT,  0) \
+    X(X_SAT,    "SATUR",   0, F_PCT,  0) X(X_EXCITE, "EXCITE",  0, F_PCT,  0) \
     X(X_NOISE,  "NOISE",   0, F_PCT,  0) X(X_NTONE,  "N.TONE", 40, F_PCT,  0) \
     X(X_NMOVE,  "N.MOVE", 40, F_PCT,  0) X(X_MASTER, "OUTPUT", 88, F_PCT,  0) \
     /* ---- track mix: volume, pan, reverb send, delay send ---- */ \

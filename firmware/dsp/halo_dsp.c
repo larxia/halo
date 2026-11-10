@@ -395,7 +395,7 @@ static void drone_cook(void)
     dsp_drone_hz = note_hz(dr.root);
     /* each partial wanders toward a random level: a new aim now and then (MOTION), brighter partials quieter (TONE) */
     for (i = 0; i < DR_PARTS; i++) {
-        float t = fmi_powf(DR_HARM[i], -1.6f + tilt * 1.3f);
+        float t = fmi_powf(DR_HARM[i], -2.0f + tilt * 1.4f);   /* upper partials fall away fast: soft, not reedy */
         if (rndf() < motion * 0.010f + 0.0005f)
             dr.amp_to[i] = t * (0.25f + 0.75f * rndf());
         dr.amp[i] += (dr.amp_to[i] - dr.amp[i]) * (0.004f + motion * 0.03f);
@@ -404,7 +404,7 @@ static void drone_cook(void)
     if (rndf() < 0.01f + motion * 0.03f)
         dr.wob_to = rnds() * u7(D_WOBBLE) * 0.30f;
     dr.wob += (dr.wob_to - dr.wob) * (0.002f + motion * 0.01f);
-    svf_set(&dr.cut, v_cut(u7(D_CUT) - 0.25f * fmi_maxf(mac_depth, 0.0f) + dr.wob), 0.25f + u7(D_WOBBLE) * 0.3f);
+    svf_set(&dr.cut, v_cut(u7(D_CUT) - 0.25f * fmi_maxf(mac_depth, 0.0f) + dr.wob), 0.08f + u7(D_WOBBLE) * 0.12f);
     dr.clock++;
 }
 
@@ -498,7 +498,7 @@ PLAT_RAM_CODE static void drone_run(float *l, float *r, uint32_t n)
         for (i = 0; i < nparts; i++) {
             float v = mc_run(&dr.osc[i], e[i]);
             if (i < ntw)
-                v += mc_run(&dr.twin[i], et[i]);
+                v += mc_run(&dr.twin[i], et[i]) * (i < 3u ? 1.0f : 0.5f);   /* the beating soft up high: no roughness */
             sl += v * wl[i];
             sr += v * wr[i];
         }
@@ -531,8 +531,8 @@ PLAT_RAM_CODE static void drone_run(float *l, float *r, uint32_t n)
         lv += dlv;
         sl = svf_lp(&dr.fl, &dr.cut, (sl + m) * lv);
         sr = svf_lp(&dr.fr, &dr.cut, (sr + m) * lv);
-        l[k] += sl * 2.6f;
-        r[k] += sr * 2.6f;
+        l[k] += sl * 3.8f;   /* (the darker balance loses level: made up) */
+        r[k] += sr * 3.8f;
     }
 }
 
@@ -1373,7 +1373,7 @@ static struct {
     float ap[2][4], ph_ph, ph_fb[2], ph_amt, ph_rate;
     float tr_ph, tr_depth, tr_rate;
     float sat, excite, ex_hp[2], noise, ntone, nmove, n_lp[2], n_ph, master, out_g, dc_x[2], dc_y[2];
-    float spk[2][2], spk_mix;          /* the speaker's low cut: two one-pole stages a side, faded in and out */
+    float spk[2][2], spk_mix, top[2];   /* top: a fixed one-pole roll-off (~9 kHz), always: no glassy edge */          /* the speaker's low cut: two one-pole stages a side, faded in and out */
 } ms;
 
 static void master_cook(void)
@@ -1481,6 +1481,10 @@ PLAT_RAM_CODE static void master_run(float *l, float *r, uint32_t n)
                 h -= ms.spk[c][1];
                 x[c] += (h - x[c]) * ms.spk_mix;
             }
+        for (c = 0; c < 2u; c++) {
+            ms.top[c] += (x[c] - ms.top[c]) * 0.72f;
+            x[c] = ms.top[c];
+        }
         for (c = 0; c < 2u; c++) {
             float y = x[c] - ms.dc_x[c] + 0.9993f * ms.dc_y[c];   /* DC blocker (~5 Hz): the rectifiers' offset */
             ms.dc_x[c] = x[c];
