@@ -244,7 +244,7 @@ static void atmos_cook(void)
     atm.air = u7(A_AIR) * (0.55f + 0.45f * fmi_maxf(mac_shim, -0.9f));
     atm.sub = u7(A_SUB) * (1.0f + 0.8f * fmi_maxf(mac_depth, 0.0f));
     atm.width = u7(A_WIDTH);
-    atm.glide = fmi_minf(tc(0.45f) * (float)HALO_CHUNK, 1.0f);        /* ~0.45 s glide between chords */
+    atm.glide = fmi_minf(tc(0.12f) * (float)HALO_CHUNK, 1.0f);        /* a short glide, for steps of a tone or less */
     base = u7(A_CUT) - 0.22f * fmi_maxf(mac_depth, 0.0f) + 0.12f * fmi_maxf(mac_shim, 0.0f)
            + lfo * u7(A_LFOD) * 0.25f;
     for (i = 0; i < ATMOS_VOICES; i++) {
@@ -572,7 +572,7 @@ static void shim_cook(void)
     sh.eg.r = tc(v_time(u7(S_REL)) * 0.3f);
     eg_chunkify(&sh.eg32, &sh.eg);
     for (i = 0; i < SHIM_SLOTS; i++) {
-        sh.s[i].pitch += ((float)sh.s[i].note - sh.s[i].pitch) * 0.03f;
+        sh.s[i].pitch = (float)sh.s[i].note;   /* never slides: high partials sliding are a whistle, a siren */
         for (j = 0; j < SH_PARTS; j++) {
             if (rndf() < 0.004f + spark * 0.05f)
                 sh.s[i].tw_to[j] = rndf() * rndf();
@@ -1629,6 +1629,13 @@ void dsp_pad_chord(const int32_t *notes, uint32_t n)
             mc_start(&v->sub, rndf());
             v->fl.ic1 = v->fl.ic2 = v->fr.ic1 = v->fr.ic2 = 0.0f;
         }
+        /* a step of a tone or less glides; a wider move re-sounds the voice (dipped and swelling back), never a
+         * slide across the interval, which on a sustained pad is a siren */
+        if (v->eg.st != EG_IDLE && fmi_fabsf((float)notes[i] - v->pitch) > 2.5f) {
+            v->pitch = (float)notes[i];
+            v->eg.v *= 0.35f;
+            v->eg.st = EG_ATK;
+        }
         if (v->eg.st == EG_IDLE || v->eg.st == EG_REL)
             v->eg.st = EG_ATK;
         v->note = notes[i];
@@ -1655,6 +1662,11 @@ void dsp_shim_chord(const int32_t *notes, uint32_t n)
             s->pitch = (float)notes[i];
             for (j = 0; j < SH_PARTS; j++)
                 mc_start(&s->o[j], rndf());
+        } else if (s->note != notes[i]) {   /* a new note: this slot fades down and swells back on it */
+            s->eg.v *= 0.15f;
+            s->eg.st = EG_ATK;
+            for (j = 0; j < SH_PARTS; j++)
+                s->tw[j] *= 0.3f;
         }
         if (s->eg.st == EG_IDLE || s->eg.st == EG_REL)
             s->eg.st = EG_ATK;
