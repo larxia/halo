@@ -1,10 +1,20 @@
-# The CHORDS page: four keys make four chords (and switch INFINITY to them); playing, it walks the slots in order.
+# The CHORDS page: a key plays the key's own chord now, held (the same key: off); REC + keys fill the slots; playing,
+# INFINITY walks the slots, and a key takes over at once. MELODY: the keys play the melody, in key.
 master 3000
 wait 600
 tap GLO
 tap GLO
 expect page 8
 expect prog_mine 0
+# preset 25 is D major: key 0 (F) snaps to E: E minor 7
+tapkey 0
+wait 300
+expect live_root 4
+expect chord_n 4
+tapkey 0
+wait 300
+expect live_root -1
+tap REC
 tapkey 0
 wait 300
 expect prog_mine 1
@@ -14,6 +24,7 @@ tapkey 3
 wait 300
 tapkey 7
 wait 2500
+tap REC
 expect prog_n 4
 shot chords.png
 tap PLAY
@@ -21,10 +32,19 @@ wait 5000
 expect prog_i 0
 wait 4000
 expect prog_i 1
-wait 16000
-expect prog_i 3
-wait 6000
-expect prog_i 0
+# a key while it plays: that chord now (key 7, C, snaps to B: B minor 7)
+tapkey 7
+wait 300
+expect live_root 11
 expect chord_n 4
-shot chords_playing.png
+tap GLO
+expect page 9
+wav melody.wav
+tapkey 4
+wait 200
+tapkey 9
+wait 2000
+wavstop
+expect played4 1
+shot melody.png
 tap PLAY

@@ -16,6 +16,7 @@ volatile uint8_t comp_chord_n, comp_chord_deg;
 volatile uint32_t comp_bar, comp_beat16;
 volatile float comp_energy;
 volatile uint8_t comp_prog_i = 0xFFu;
+volatile int8_t comp_live_root = -1;
 volatile uint8_t comp_section;
 volatile uint32_t comp_note_flash[NTRACK];
 volatile uint8_t comp_held_mask;
@@ -440,6 +441,7 @@ static struct {
     uint8_t phrase_on;                 /* the melody is in a phrase (1) or resting (0) */
     uint32_t phrase_until, lh_at;      /* lh: the piano's left hand, its second note */
     uint32_t prog_next;                /* MINE: the next slot of the progression */
+    uint32_t lead_until;               /* the player has the melody until then (INFINITY's own steps aside) */
     int32_t lh_note;
 } inf;
 
@@ -640,6 +642,8 @@ static void inf_start(uint32_t now)
 static void inf_stop(void)
 {
     inf.on = 0;
+    inf.lead_until = 0;
+    comp_live_root = -1;
     comp_prog_i = 0xFFu;
     inf_aria_release();
     chord_release();
@@ -716,7 +720,7 @@ static void inf_tick(uint32_t now)
         note_for(TR_ECHO, inf.lh_note, 44u + crange(14u), PPQ * 2u);
     }
     /* PULSE: the ostinato on 8ths (16ths when the figure is long), over the chord's tones an octave up */
-    if (u7(G_PULSE) > 0.01f && voicing_n && comp_energy > 0.25f) {
+    if (u7(G_PULSE) > 0.01f && voicing_n && comp_energy > 0.25f && now >= inf.lead_until) {
         uint32_t step = inf.ost_len == 16u ? T16 : T16 * 2u;
         if (now % step == 0u) {
             uint32_t i = (now / step) % inf.ost_len, idx = inf.ost[i];
@@ -749,7 +753,7 @@ static void inf_tick(uint32_t now)
             note_for(TR_ARIA, inf.aria_notes[i], 70u + crange(30u), 0);
         }
     /* the melody: euclidean hits on the 16th grid, the motif's degrees over the chord's root */
-    if (now % T16 == 0u && comp_energy > 0.22f && inf.phrase_on) {
+    if (now % T16 == 0u && comp_energy > 0.22f && inf.phrase_on && now >= inf.lead_until) {
         uint32_t s16 = (now / T16) % 16u, len16;
         int strong = s16 % 4u == 0u;
         float p = (0.35f + 0.65f * dens) * inf.breath * (0.4f + 0.8f * comp_energy);
@@ -1044,10 +1048,27 @@ static void events(void)
             if (!P[D_HOLD] && !held_n[TR_DRONE] && !(comp_playing))
                 dsp_release_all(TR_DRONE);
             break;
+        case EV_CHORD_LIVE: {          /* the CHORDS page's keys: this chord, now */
+            uint32_t type = t < CH_NOTES ? t : CH_AUTO;
+            comp_live_root = (int8_t)(note % 12);
+            play_chord(note, type, 1);
+            if (inf.on) {              /* INFINITY takes it as its chord and goes on from here, two bars on */
+                inf.deg = note_degree(note, 48);
+                inf.next_chord = tick_play + BAR * 2u;
+                inf_aria_release();
+                if (P[D_FOLLOW] && crndf() < 0.7f)
+                    inf_drone(note);
+            }
+            break;
+        }
+        case EV_LEAD:
+            inf.lead_until = tick_play + BAR * 4u;   /* four bars after the player's last note */
+            break;
         case EV_CHORD:                 /* the CHORDS page: a slot heard */
             play_chord(note, t < CH_NOTES ? t : CH_AUTO, 1);
             break;
         case EV_CHORD_OFF:
+            comp_live_root = -1;
             if (!comp_playing)
                 chord_release();
             break;

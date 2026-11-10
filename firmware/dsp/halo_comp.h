@@ -42,7 +42,10 @@ typedef struct {
 extern song_t song;
 
 /* the main loop's events */
-enum { EV_NOTE_ON, EV_NOTE_OFF, EV_PLAY, EV_STOP, EV_PANIC, EV_RELEASE_TRACK, EV_DRONE_HOLD, EV_CHORD, EV_CHORD_OFF };
+enum { EV_NOTE_ON, EV_NOTE_OFF, EV_PLAY, EV_STOP, EV_PANIC, EV_RELEASE_TRACK, EV_DRONE_HOLD, EV_CHORD, EV_CHORD_OFF,
+       EV_CHORD_LIVE, EV_LEAD };
+/* EV_CHORD_LIVE: the CHORDS page's keys: this chord now (note: root, track: type), held until the next; while
+ * INFINITY plays it takes over and goes on from there. EV_LEAD: the player plays the melody (INFINITY's steps aside) */
 /* EV_CHORD: a chord heard on the pad (note: its root, track: its type), EV_CHORD_OFF: let go (the CHORDS page) */
 void comp_post(uint32_t type, uint32_t track, int32_t note, uint32_t vel);
 
@@ -60,7 +63,8 @@ extern volatile int32_t comp_chord[4];
 extern volatile uint8_t comp_chord_n, comp_chord_deg;
 extern volatile uint32_t comp_bar, comp_beat16;
 extern volatile float comp_energy;
-extern volatile uint8_t comp_prog_i;   /* MINE: the slot playing (0xFF none) */
+extern volatile uint8_t comp_prog_i;
+extern volatile int8_t comp_live_root;   /* the CHORDS page's chord held (-1 none) */   /* MINE: the slot playing (0xFF none) */
 extern volatile uint8_t comp_section;   /* INFINITY: 0 intro, 1 bloom, 2 song, 3 thin, 4 swell */
 extern volatile uint32_t comp_note_flash[NTRACK];   /* a counter per track: a note started (the screen pulses) */
 extern volatile uint8_t comp_held_mask;             /* tracks with a key held (keyboard) */

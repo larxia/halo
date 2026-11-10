@@ -91,7 +91,7 @@ wait 300
 expect preset 1
 # SETTINGS TEST: the tone, an engine alone, back off
 turn SELECT 20
-expect page 11
+expect page 12
 turn ALGO 1
 turn K4 1
 wav test_tone.wav

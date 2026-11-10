@@ -16,7 +16,7 @@
 #include "dsp/halo_dsp.h"
 #include "dsp/halo_comp.h"
 
-#define HALO_VERSION "0.3.0"
+#define HALO_VERSION "0.3.1"
 
 /* ---------------------------------------------------------------- colours --- */
 #define PINK RGB(247, 170, 200)
@@ -57,10 +57,10 @@ static uint8_t dirty;
 static uint8_t test_mode;
 
 /* ------------------------------------------------------------------- pages --- */
-enum { PG_HOME, PG_SYNTH, PG_DRONE, PG_SHIMMER, PG_ARIA, PG_ECHO, PG_SEQ, PG_INFINITY, PG_CHORDS, PG_FX, PG_PRESETS,
-       PG_SETTINGS, NPAGES };
+enum { PG_HOME, PG_SYNTH, PG_DRONE, PG_SHIMMER, PG_ARIA, PG_ECHO, PG_SEQ, PG_INFINITY, PG_CHORDS, PG_MELODY, PG_FX,
+       PG_PRESETS, PG_SETTINGS, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"HOME", "SYNTH", "DRONE", "SHIMMER", "ARIA", "ECHO", "SEQUENCE",
-                                              "INFINITY", "CHORDS", "FX", "PRESETS", "SETTINGS"};
+                                              "INFINITY", "CHORDS", "MELODY", "FX", "PRESETS", "SETTINGS"};
 static const char *const TRACK_NAME[NTRACK] = {"ATMOS", "DRONE", "SHIMMER", "ARIA", "ECHO"};
 static const char *const TRACK_SHORT[NTRACK] = {"PAD", "DRN", "SHM", "ARI", "ECH"};
 
@@ -98,6 +98,8 @@ static const page_rows_t ROWS[NPAGES] = {
       {G_PULSE, G_REST, G_BEAT, G_BTONE}}},
     {2, {"THE SLOT", "PROGRESSION"},
      {{V_CH_ROOT, V_CH_TYPE, V_CH_BARS, V_CH_COUNT}, {G_PROG, G_DRIFT, G_KEY, G_TEMPO}}},
+    {3, {"SOUND", "ARPEGGIO", "SHAPE"},
+     {{E_MODEL, E_TONE, E_DEC, T5_VOL}, {E_ARP, E_ARATE, E_AOCT, T5_DLY}, {E_GLIDE, E_VIB, E_RES, T5_REV}}},
     {7, {"REVERB", "REVERB", "DELAY", "DELAY", "MODULATION", "MOTION AND HEAT", "TEXTURE"},
      {{R_TYPE, R_SIZE, R_DECAY, R_DAMP}, {R_MOD, R_SHIM, R_LEVEL, R_LOCUT}, {L_TIME, L_FDBK, L_TONE, L_WOW},
       {L_MODE, L_LEVEL, L_TOREV, X_WARBLE}, {C_DEPTH, C_RATE, H_AMT, H_RATE}, {T_DEPTH, T_RATE, X_SAT, X_EXCITE},
@@ -197,7 +199,10 @@ static uint32_t page_track(void)
     case PG_ARIA:
         return TR_ARIA;
     case PG_ECHO:
+    case PG_MELODY:
         return TR_ECHO;
+    case PG_CHORDS:
+        return TR_ATMOS;
     default:
         return ui.track;
     }
@@ -883,8 +888,8 @@ static void button(uint32_t b)
     case B_SEQ:
         select_page(PG_SEQ);
         break;
-    case B_GLO:                          /* INFINITY, and again: its CHORDS */
-        select_page(ui.page == PG_INFINITY ? PG_CHORDS : PG_INFINITY);
+    case B_GLO:                          /* INFINITY, then CHORDS, then MELODY, round */
+        select_page(ui.page == PG_INFINITY ? PG_CHORDS : ui.page == PG_CHORDS ? PG_MELODY : PG_INFINITY);
         break;
     case B_FX:
         select_page(PG_FX);
@@ -973,20 +978,33 @@ static void input(void)
                 ui.key_note[k] = -1;
                 continue;
             }
-            if (ui.page == PG_CHORDS) {  /* a key: this slot's root; heard; on to the next slot */
-                song.prog[ui.slot].root = (uint8_t)((53u + k) % 12u);
-                if (ui.slot + 1u > song.prog_n)
-                    song.prog_n = (uint8_t)(ui.slot + 1u);
-                P[G_PROG] = PROG_MINE;
-                chord_audition();
-                ui.slot = (uint8_t)((ui.slot + 1u) % NPROG);
-                song_dirty();
+            if (ui.page == PG_CHORDS) {
+                /* a key: the scale's own chord on it, now, held until the next (the same key again: off). With REC
+                 * it goes into the slot instead, and on to the next slot (four keys, a progression) */
+                int32_t root = scale_quantize(53 + (int32_t)k);
+                if (ui.rec) {
+                    song.prog[ui.slot].root = (uint8_t)(root % 12);
+                    song.prog[ui.slot].type = CH_AUTO;
+                    if (ui.slot + 1u > song.prog_n)
+                        song.prog_n = (uint8_t)(ui.slot + 1u);
+                    P[G_PROG] = PROG_MINE;
+                    chord_audition();
+                    ui.slot = (uint8_t)((ui.slot + 1u) % NPROG);
+                    song_dirty();
+                } else if (comp_live_root == (int8_t)(root % 12)) {
+                    comp_post(EV_CHORD_OFF, 0, 0, 0);
+                } else {
+                    comp_post(EV_CHORD_LIVE, CH_AUTO, 48 + root % 12, 100);
+                    audition_until = 0;
+                }
                 ui.key_note[k] = -1;
                 ui.redraw_main = ui.redraw_cards = 1;
                 continue;
             }
-            if (set.lock)
+            if (set.lock || ui.page == PG_MELODY)
                 note = scale_quantize(note);
+            if (ui.page == PG_MELODY)
+                comp_post(EV_LEAD, 0, 0, 0);
             ui.key_note[k] = note;
             ui.key_track[k] = (uint8_t)t;
             ui.last_note = note;
@@ -1601,7 +1619,38 @@ static void draw_chords(void)
         text_cat(n, "B");
         cv_text(x + 38, y + 2, &FONT_XS, n, DIMG);
     }
-    cv_text(8, 122, &FONT_XS, "KEYS: A CHORD INTO THE SLOT   PRESET: SLOT", DIMG);
+    {
+        char now[24];
+        chord_name(now);
+        cv_text(8, 112, &FONT_XS, comp_live_root >= 0 ? "HOLDING" : "SOUNDING", DIMG);
+        cv_text(70, 110, &FONT_B, now, comp_chord_root_pc >= 0 ? PINK : DIMG);
+    }
+    cv_text(8, 128, &FONT_XS, ui.rec ? "REC: KEYS FILL THE SLOTS" : "KEYS: PLAY CHORDS  REC+KEYS: FILL SLOTS",
+            ui.rec ? RGB(255, 96, 140) : DIMG);
+    cv_blit(0, 36);
+}
+
+/* MELODY: the keys play the melody (ECHO), always in key; the chord sounding, its tones lit on the keys */
+static void draw_melody(void)
+{
+    char t[32];
+    uint32_t i;
+    static const char *const MN[3] = {"FM BELLS", "FELT PIANO", "ANALOG LEAD"};
+    cv_begin(240, 140, C_BLACK);
+    cv_text(8, 2, &FONT_XS, "PLAY THE MELODY: ALWAYS IN KEY", DIMG);
+    cv_text(8, 14, &FONT_B, MN[P[E_MODEL] % 3u], INK);
+    cv_text(8, 40, &FONT_XS, "OVER", DIMG);
+    chord_name(t);
+    cv_text(8, 52, &FONT_L, t, comp_chord_root_pc >= 0 ? PINK : DIMG);
+    t[0] = 0;
+    for (i = 0; i < comp_chord_n && i < 4u; i++) {   /* the chord's notes: where a melody rests well */
+        text_cat(t, NOTE_NAME[((comp_chord[i] % 12) + 12) % 12]);
+        text_cat(t, " ");
+    }
+    cv_text(8, 92, &FONT_B, comp_chord_n ? t : "NO CHORD YET", comp_chord_n ? INK : DIMG);
+    cv_text(8, 112, &FONT_XS, "LIT KEYS: THE CHORD'S NOTES", PINK_MID);
+    cv_text(8, 126, &FONT_XS, P[G_MODE] == MODE_INFINITY && comp_playing ? "INFINITY'S MELODY WAITS WHILE YOU PLAY"
+                                                                           : "GLO: INFINITY, CHORDS, MELODY", DIMG);
     cv_blit(0, 36);
 }
 
@@ -1701,6 +1750,9 @@ static void draw_main(void)
     case PG_CHORDS:
         draw_chords();
         break;
+    case PG_MELODY:
+        draw_melody();
+        break;
     case PG_FX:
         draw_fx();
         break;
@@ -1749,7 +1801,7 @@ static void lights(void)
     b |= (uint32_t)(ui.page == PG_HOME) << B_HOME;
     b |= (uint32_t)(ui.page >= PG_SYNTH && ui.page <= PG_ECHO) << B_EDIT;
     b |= (uint32_t)(ui.page == PG_SEQ) << B_SEQ;
-    b |= (uint32_t)(ui.page == PG_INFINITY || ui.page == PG_CHORDS) << B_GLO;
+    b |= (uint32_t)(ui.page >= PG_INFINITY && ui.page <= PG_MELODY) << B_GLO;
     b |= (uint32_t)(ui.page == PG_FX) << B_FX;
     b |= (uint32_t)(ui.page == PG_PRESETS) << B_SEL;
     b |= (uint32_t)(P[D_HOLD] != 0) << B_ENV;
@@ -1771,6 +1823,15 @@ static void lights(void)
         }
         k |= 1u << BK[ui.track];
         dim |= 1u << BK[NTRACK + comp_edit_pat[ui.track]];
+    } else if ((ui.page == PG_MELODY || ui.page == PG_CHORDS) && comp_chord_n) {
+        /* the chord's tones lit dim under the keys (MELODY: where the melody sits well); the keys held bright */
+        uint32_t pcs = 0;
+        for (i = 0; i < comp_chord_n && i < 4u; i++)
+            pcs |= 1u << (uint32_t)(((comp_chord[i] % 12) + 12) % 12);
+        for (i = 0; i < NKEYS; i++)
+            if ((pcs >> ((53u + i) % 12u)) & 1u)
+                dim |= 1u << i;
+        k = ui.keys;
     } else if ((ui.btn >> B_HOME) & 1u) {
         for (i = 0; i < NTRACK; i++) {
             if ((dsp_solo >> i) & 1u)
@@ -1829,7 +1890,7 @@ void app_frame(void)
     {
         uint32_t st = comp_step[ui.track] | (uint32_t)comp_playing << 8 | (uint32_t)comp_play_pat[ui.track] << 9;
         uint32_t ch = (uint32_t)(comp_chord_root_pc + 1) | (uint32_t)comp_chord_type << 8 | (uint32_t)comp_section << 16
-                      | (uint32_t)comp_prog_i << 24;
+                      | (uint32_t)comp_prog_i << 24 ^ (uint32_t)(comp_live_root + 1) << 28;
         if (st != ui.seen_step) {
             ui.seen_step = st;
             ui.redraw_head = 1;
@@ -1839,7 +1900,7 @@ void app_frame(void)
         if (ch != ui.seen_chord || comp_bar != ui.seen_bar) {
             ui.seen_chord = ch;
             ui.seen_bar = comp_bar;
-            if (ui.page == PG_HOME || ui.page == PG_INFINITY || ui.page == PG_CHORDS)
+            if (ui.page == PG_HOME || (ui.page >= PG_INFINITY && ui.page <= PG_MELODY))
                 ui.redraw_main = 1;
         }
         for (i = 0; i < NTRACK; i++)
@@ -1910,6 +1971,8 @@ int app_expect(const char *what, int *got)
         *got = song.prog_n;
     else if (!strcmp(what, "prog_i"))
         *got = comp_prog_i;
+    else if (!strcmp(what, "live_root"))
+        *got = comp_live_root;
     else if (!strcmp(what, "prog_mine"))
         *got = P[G_PROG];
     else if (!strcmp(what, "model"))
