@@ -7,10 +7,11 @@
 | Host simulator: the whole firmware (UI, composer, engines, storage, backup) built from the same sources | **passing** | fm1-base's host simulator on Linux x86-64 |
 | Audio: level, peak, DC, NaN, stereo, spectrum on every render | **passing** | `firmware/tests/analyse.py` on the simulator's WAVs |
 | CPU load on the FM-1 | **estimated, not measured** | `firmware/tests/bench/cpu_estimate.sh` (valgrind, calibrated) |
-| Compiling for the FM-1's CPU (JieLi clang, pi32v2) | **not yet done** | `.github/workflows/build.yml`, first run pending |
+| Compiling for the FM-1's CPU (JieLi clang, pi32v2) | **passing** (2026-11-10): image 189 KB of 581, RAM 44 KB of 96, RAM code 5 KB of 32, pool 292 KB of 336 | GitHub Actions, `.github/workflows/build.yml` |
 | Running on an FM-1 | **not yet done** | your FM-1, following the hardware plan below |
 
-Nothing in this repository has run on FM-1 hardware yet. Every result below is from simulation.
+HALO compiles for the FM-1 and passes fm1-base's build checks, but has not run on FM-1 hardware yet. Every sound and
+CPU result below is from simulation.
 
 ## Running the tests
 
@@ -61,9 +62,8 @@ Optimisation history: 89% → 65% (oscillators as magic circles, a shared forman
 
 Do these in order, and record the results.
 
-1. **Build.** Push to GitHub. The workflow must pass. Its first run is the first compile for pi32v2: fix what it
-   reports (fm1-base's build checks: no doubles, no hardware access outside the base, RAM code rules, the 64-bit
-   multiply check).
+1. **Build.** Push to GitHub; the workflow must pass and leave `halo.fwsc` as the run's artifact (done: it compiles
+   and passes fm1-base's build checks).
 2. **Back up first:** see DEPLOY.md.
 3. **Install** with the installer, then let it boot. Pass: the splash (pink Ø, HALO), then HOME.
 4. **Idle load:** SETTINGS shows AUDIO LOAD. Note it with nothing playing.

@@ -16,9 +16,9 @@ Around them sit a probability step sequencer with a voice-leading chord generato
 delay and modulation section, four performance macros (SPACE, MOTION, SHIMMER, DEPTH), and **INFINITY**: press PLAY
 and it composes, forever, in one of ten moods, with ostinatos, rests and a soft beat when the mood calls for them.
 
-> **Status 0.2.0: tested in simulation only.** HALO builds and passes all its tests in fm1-base's host simulator, and
-> its CPU load is estimated at about 47–51% typical and 69% in the everything-at-once worst case. It has not yet been compiled for the FM-1's CPU
-> or run on an FM-1. Read [docs/TESTING.md](docs/TESTING.md) and [docs/DEPLOY.md](docs/DEPLOY.md) before installing.
+> **Status 0.2.0: compiles for the FM-1; not yet run on one.** The FM-1 package builds on GitHub Actions (image
+> 189 KB, RAM 44 KB of 96, pool 292 KB of 336) and every test passes in fm1-base's host simulator. CPU load is
+> estimated at about 47–51% typical and 69% in the everything-at-once worst case. Read [docs/TESTING.md](docs/TESTING.md) and [docs/DEPLOY.md](docs/DEPLOY.md) before installing.
 
 ## Quick start
 
